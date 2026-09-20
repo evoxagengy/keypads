@@ -63,7 +63,7 @@ public sealed class DeviceLayoutWizardWindow : Window
         _template.SelectedValue=Layout.Source=="full-keyboard"?DeviceLayoutTemplate.FullKeyboard:
                                 Layout.Source=="numeric-4x5"?DeviceLayoutTemplate.Numeric4x5:DeviceLayoutTemplate.Custom;
         controls.Children.Add(_template);
-        var apply=MakeButton("Aplicar modelo",false);apply.Click+=(_,_)=>ApplyTemplate();controls.Children.Add(apply);
+        var apply=MakeButton("Aplicar modelo",false);apply.Click+=(_,_)=>ApplySelectedTemplate();controls.Children.Add(apply);
 
         controls.Children.Add(new TextBlock{Text="Linhas",VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(18,0,6,0)});
         controls.Children.Add(_rows);
@@ -106,7 +106,7 @@ public sealed class DeviceLayoutWizardWindow : Window
     private static DeviceLayoutDefinition Clone(DeviceLayoutDefinition source)
         => JsonSerializer.Deserialize<DeviceLayoutDefinition>(JsonSerializer.Serialize(source))!;
 
-    private void ApplyTemplate()
+    private void ApplySelectedTemplate()
     {
         if(_template.SelectedValue is not DeviceLayoutTemplate template)return;
         Layout=DeviceLayoutCatalog.CreateTemplate(template,_device.Fingerprint,DisplayDeviceName());
