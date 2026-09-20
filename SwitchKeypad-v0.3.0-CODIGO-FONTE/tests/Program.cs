@@ -87,6 +87,17 @@ class Program
    }
    Check(PhysicalKeyMap.Resolve(new("test",0x48,0x26,true,true,DateTimeOffset.Now))==null,"Navigation arrow is not numpad 8");
    Check(PhysicalKeyMap.Resolve(new("test",0x1C,0x0D,false,true,DateTimeOffset.Now))==null,"Main Enter is not numpad Enter");
+   var numericLayout=DeviceLayoutCatalog.Numeric4x5Template("device","Numeric Keypad");
+   Check(numericLayout.Keys.Count==19,"Reference numeric layout has 19 physical keys");
+   Check(DeviceLayoutCatalog.GetKey(numericLayout,"+") is {Row:1,Column:3,RowSpan:1},"Plus key is a normal aligned key");
+   Check(DeviceLayoutCatalog.GetKey(numericLayout,"Backspace") is {Row:2,Column:3,RowSpan:1},"Backspace occupies row 3 column 4");
+   Check(DeviceLayoutCatalog.GetKey(numericLayout,"Enter") is {Row:3,Column:3,RowSpan:2},"Enter is the only vertical key in reference numpad");
+   Check(DeviceLayoutCatalog.GetKey(numericLayout,"0") is {Row:4,Column:0,ColumnSpan:1},"Zero remains a normal key");
+   Check(DeviceLayoutCatalog.GetKey(numericLayout,"000") is {Row:4,Column:1,PressCount:3},"000 burst key is modeled separately");
+   Check(DeviceLayoutCatalog.GetKey(numericLayout,"Num")?.ReservedToggle==true,"Num Lock is reserved as enable-disable control");
+   var fullLayout=DeviceLayoutCatalog.FullKeyboardTemplate("full","Main Keyboard");
+   Check(fullLayout.Columns==23&&DeviceLayoutCatalog.GetKey(fullLayout,"NumPlus")?.RowSpan==2&&DeviceLayoutCatalog.GetKey(fullLayout,"NumEnter")?.RowSpan==2,"Full keyboard template includes aligned numpad");
+
    var window=new MainWindow();
    window.Show();
    window.Dispatcher.Invoke(()=>{},System.Windows.Threading.DispatcherPriority.Loaded);
@@ -99,6 +110,11 @@ class Program
    Raw(0x4F,device:"other");Check(Field<string>(window,"_selectedKey")=="5","Other keyboard cannot change selection");
    Raw(0x4F,down:false);Check(Field<string>(window,"_selectedKey")=="5","Key-up keeps selected state");
    Raw(0x4F,vk:0x23);Check(Field<string>(window,"_selectedKey")=="1","Num Lock off still selects physical key 1");
+   store.Config.Enabled=true;
+   Raw(0x45,vk:0x90);Check(!store.Config.Enabled,"Num Lock disables Switch Keypad on selected keyboard");
+   System.Threading.Thread.Sleep(280);
+   Raw(0x45,vk:0x90);Check(store.Config.Enabled,"Num Lock enables Switch Keypad again");
+
    var ensure=typeof(MainWindow).GetMethod("EnsureMapping",BindingFlags.Instance|BindingFlags.NonPublic)!;
    var oldProfile=store.Config.ActiveProfileId;store.CreateProfile();Raw(0x4C);
    var createdMapping=(KeyMapping)ensure.Invoke(window,null)!;
@@ -125,6 +141,7 @@ class Program
    foreach(var tile in Children<KeyTileControl>(root)){
     var grid=(Grid)tile.Content;
     Check(grid.Background!=null,"Full key hit surface "+tile.KeyLabel);
+    Check(!string.IsNullOrWhiteSpace(tile.ActionLabel),"Every visible key keeps an action/status label "+tile.KeyLabel);
     var hit=grid.InputHitTest(new Point(grid.ActualWidth*.25,grid.ActualHeight*.30));
     Check(hit!=null,"Empty surface hit "+tile.KeyLabel);
     var before=grid.RenderSize;tile.IsSelectedKey=true;tile.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));root.UpdateLayout();
