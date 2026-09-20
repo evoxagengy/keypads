@@ -20,6 +20,8 @@ public partial class MainWindow : Window
     private bool _identifyMode;
     private DeviceLayoutDefinition _activeLayout = DeviceLayoutCatalog.LegacyTemplate("");
     private int _iconGeneration;
+    private DateTimeOffset _lastNumLockToggle=DateTimeOffset.MinValue;
+    private readonly Dictionary<string,BurstState> _bursts=new();
     private readonly Core.Actions.ExecutionSessions _sessions=new();
     private readonly IInterceptionProvider _interception = new InterceptionProvider();
     private readonly HashSet<int> _pressedScans = [];
@@ -88,6 +90,11 @@ public partial class MainWindow : Window
         var devices = App.RawInput.EnumerateKeyboards();
         if (App.ConfigStore.Config.SelectedDeviceFingerprint is { Length:>0 } fp)
             _selectedDevice = devices.FirstOrDefault(d=>d.Fingerprint==fp);
+        if(_selectedDevice is not null)
+        {
+            var saved=App.ConfigStore.Config.Devices.FirstOrDefault(x=>x.Fingerprint==_selectedDevice.Fingerprint);
+            if(!string.IsNullOrWhiteSpace(saved?.CustomName))_selectedDevice.CustomName=saved.CustomName;
+        }
         _activeLayout = DeviceLayoutCatalog.Resolve(App.ConfigStore.Config,_selectedDevice);
         if (_selectedDevice is null)
         {
@@ -96,12 +103,12 @@ public partial class MainWindow : Window
             lock(_pressedScans)_pressedScans.Clear();
             HeaderDeviceName.Text="Selecione um dispositivo"; HeaderDeviceIds.Text=$"{devices.Count} teclado(s) detectado(s)";
             DeviceNameText.Text="Nenhum dispositivo"; DeviceStatusText.Text="Aguardando seleção"; DeviceStatusDot.Fill=WarningBrush;
-            DeviceDetailText.Text="VID: —\nPID: —\nSerial: —\nProduto: —\nFabricante: —"; HeaderStatusText.Text="Selecione o numpad dedicado";
+            DeviceDetailText.Text="VID: —\nPID: —\nSerial: —\nProduto: —\nFabricante: —"; HeaderStatusText.Text="Selecione um teclado";
         }
         else
         {
-            HeaderDeviceName.Text=_selectedDevice.FriendlyName; HeaderDeviceIds.Text=$"VID: {_selectedDevice.Vid ?? "----"}    PID: {_selectedDevice.Pid ?? "----"}";
-            DeviceNameText.Text=_selectedDevice.FriendlyName; DeviceStatusText.Text="Dispositivo conectado"; DeviceStatusDot.Fill=SuccessBrush;
+            HeaderDeviceName.Text=DisplayDeviceName(_selectedDevice); HeaderDeviceIds.Text=$"VID: {_selectedDevice.Vid ?? "----"}    PID: {_selectedDevice.Pid ?? "----"}";
+            DeviceNameText.Text=DisplayDeviceName(_selectedDevice); DeviceStatusText.Text="Dispositivo conectado"; DeviceStatusDot.Fill=SuccessBrush;
             DeviceDetailText.Text=$"VID: {_selectedDevice.Vid ?? "—"}\nPID: {_selectedDevice.Pid ?? "—"}\nProduto: {_selectedDevice.Product ?? "Não informado"}\nFabricante: {_selectedDevice.Manufacturer ?? "Não informado"}";
             DeviceDetailText.ToolTip=_selectedDevice.InstanceId+"\n"+_selectedDevice.Location;
             HeaderStatusText.Text="Dispositivo Conectado e Ativo";
@@ -117,43 +124,98 @@ public partial class MainWindow : Window
     private bool ShouldConsume(DeviceKeyEvent ev)
     {
         if (!App.ConfigStore.Config.Enabled || _identifyMode || _selectedDevice is null) return false;
+        if(DeviceLayoutCatalog.IsNumLock(ev))return false;
+        var candidates=DeviceLayoutCatalog.ResolveCandidates(_activeLayout,ev);
+        if(candidates.Count>0)
+            return candidates.Any(k=>FindMapping(k.Id) is { Action.Type: not ActionType.PassThrough and not ActionType.Disabled });
         var mapping = ResolvePhysicalKey(ev) is string key?FindMapping(key):null;
-        return mapping is not null && mapping.Action.Type != ActionType.PassThrough;
+        return mapping is not null && mapping.Action.Type is not (ActionType.PassThrough or ActionType.Disabled);
     }
 
     private async void Interception_KeyEvent(object? sender, DeviceKeyEvent e)
     {
         if(!Dispatcher.CheckAccess()){_ = Dispatcher.BeginInvoke(()=>Interception_KeyEvent(sender,e));return;}
         if (_selectedDevice is null || e.DeviceId!=_selectedDevice.Fingerprint) return;
-        if(e.IsKeyDown && ResolvePhysicalKey(e) is string physicalKey) SelectKey(physicalKey);
+
+        if(DeviceLayoutCatalog.IsNumLock(e))
+        {
+            if(e.IsKeyDown&&!_identifyMode)ToggleEnabledFromNumLock();
+            return;
+        }
+
         if (!e.IsKeyDown) { lock(_pressedScans) _pressedScans.Remove(e.ScanCode); return; }
         lock(_pressedScans) if(!_pressedScans.Add(e.ScanCode)) return;
-        var mapping=ResolvePhysicalKey(e) is string mappedKey?FindMapping(mappedKey):null;
-        if(mapping is not null && App.ConfigStore.Config.Enabled && !_identifyMode)
+
+        var candidates=DeviceLayoutCatalog.ResolveCandidates(_activeLayout,e);
+        if(candidates.Count>1&&candidates.Any(k=>k.PressCount>1))
         {
-            var profileId=App.ConfigStore.ActiveProfile.Id;
-            FooterStatus.Text=$"Tecla {mapping.PhysicalKey} — executando";
-            var r=await _sessions.TriggerAsync(profileId,mapping.PhysicalKey,ActionEditorWindow.Copy(mapping.Action),App.ActionExecutor);
-            if(App.ConfigStore.ActiveProfile.Id==profileId)FooterStatus.Text=$"Tecla {mapping.PhysicalKey} — {r.Message}";
+            QueueBurst(e);
+            return;
         }
+
+        if(ResolvePhysicalKey(e) is string physicalKey)
+        {
+            SelectKey(physicalKey);
+            await ExecuteMappedKeyAsync(physicalKey);
+        }
+    }
+
+    private void QueueBurst(DeviceKeyEvent e)
+    {
+        var id=$"{e.ScanCode}:{e.IsExtended}";
+        if(!_bursts.TryGetValue(id,out var state))
+        {
+            state=new BurstState{Event=e};
+            _bursts[id]=state;
+        }
+        state.Count++;
+        state.Cancellation?.Cancel();
+        state.Cancellation?.Dispose();
+        state.Cancellation=new CancellationTokenSource();
+        var token=state.Cancellation.Token;
+        _=Task.Run(async()=>
+        {
+            try
+            {
+                await Task.Delay(180,token);
+                await Dispatcher.InvokeAsync(async()=>
+                {
+                    if(!_bursts.Remove(id,out var current))return;
+                    current.Cancellation?.Dispose();
+                    var key=DeviceLayoutCatalog.ResolveBurst(_activeLayout,current.Event,current.Count);
+                    if(key is null)return;
+                    SelectKey(key.Id);
+                    await ExecuteMappedKeyAsync(key.Id);
+                });
+            }
+            catch(OperationCanceledException){}
+        });
+    }
+
+    private async Task ExecuteMappedKeyAsync(string physicalKey)
+    {
+        var mapping=FindMapping(physicalKey);
+        if(mapping is null || !App.ConfigStore.Config.Enabled || _identifyMode)return;
+        var profileId=App.ConfigStore.ActiveProfile.Id;
+        FooterStatus.Text=$"Tecla {KeyDisplayName(physicalKey)} — executando";
+        var r=await _sessions.TriggerAsync(profileId,mapping.PhysicalKey,ActionEditorWindow.Copy(mapping.Action),App.ActionExecutor);
+        if(App.ConfigStore.ActiveProfile.Id==profileId)FooterStatus.Text=$"Tecla {KeyDisplayName(physicalKey)} — {r.Message}";
     }
 
     private void RawInput_KeyEvent(object? sender, DeviceKeyEvent e)
     {
         if(!Dispatcher.CheckAccess()){_ = Dispatcher.BeginInvoke(()=>RawInput_KeyEvent(sender,e));return;}
         if (_selectedDevice is null || e.DeviceId != _selectedDevice.Fingerprint) return;
-        if(e.IsKeyDown && ResolvePhysicalKey(e) is string key) SelectKey(key);
-        if (_identifyMode && e.IsKeyDown)
+
+        if(DeviceLayoutCatalog.IsNumLock(e))
         {
-            if(DeviceLayoutCatalog.Observe(_activeLayout,e))
-            {
-                App.ConfigStore.Save();
-                RenderKeypad();
-            }
-            FooterStatus.Text=$"Identificação • Scan 0x{e.ScanCode:X2} • VK 0x{e.VirtualKey:X2} • {(e.IsExtended?"E0":"normal")}";
+            if(e.IsKeyDown&&!_identifyMode&&_interception.State!=InterceptionState.Running)ToggleEnabledFromNumLock();
+            return;
         }
-        // Raw Input identifies the physical source, but cannot suppress the normal keystroke.
-        // Never execute mappings here: doing so would both run the action and type the key.
+
+        if(e.IsKeyDown && ResolvePhysicalKey(e) is string key) SelectKey(key);
+        // Raw Input identifies the source device but does not selectively suppress the original keystroke.
+        // Physical mappings execute only through the exclusive provider.
     }
 
     private KeyMapping? FindMappingByScan(int scan) => App.ConfigStore.ActiveProfile.Mappings.FirstOrDefault(m=>m.ScanCode==scan);
@@ -167,7 +229,7 @@ public partial class MainWindow : Window
         foreach(var d in devices)
         {
             var label=new StackPanel();
-            label.Children.Add(new TextBlock{Text=d.FriendlyName,FontWeight=FontWeights.SemiBold});
+            label.Children.Add(new TextBlock{Text=DisplayDeviceName(d),FontWeight=FontWeights.SemiBold});
             label.Children.Add(new TextBlock{Text=$"VID {d.Vid ?? "—"} · PID {d.Pid ?? "—"} · interface {d.Fingerprint[..6]}",FontSize=11,Foreground=Brushes.LightSteelBlue,Margin=new Thickness(0,4,0,0)});
             var mi=new MenuItem{Header=label,Tag=d,ToolTip=d.InstanceId+"\n"+d.Location};
             mi.Click += (_,_)=>SelectDevice((DeviceDefinition)mi.Tag); menu.Items.Add(mi);
@@ -179,7 +241,7 @@ public partial class MainWindow : Window
 
     private void BeginIdentify()
     {
-        FooterStatus.Text="Pressione uma tecla no numpad que deseja usar…";
+        FooterStatus.Text="Pressione uma tecla no teclado que deseja usar…";
         EventHandler<DeviceKeyEvent>? handler=null;
         handler=(s,e)=>
         {
@@ -195,8 +257,39 @@ public partial class MainWindow : Window
     }
     private void SelectDevice(DeviceDefinition d)
     {
-        _sessions.CancelAll();_pressedScans.Clear();_interception.Stop(); _selectedDevice=d; App.ConfigStore.Config.SelectedDeviceFingerprint=d.Fingerprint;
-        App.ConfigStore.Config.Devices.RemoveAll(x=>x.Fingerprint==d.Fingerprint); App.ConfigStore.Config.Devices.Add(d); App.ConfigStore.Save(); RefreshDeviceDisplay();
+        _sessions.CancelAll();_pressedScans.Clear();_interception.Stop();
+        var saved=App.ConfigStore.Config.Devices.FirstOrDefault(x=>x.Fingerprint==d.Fingerprint);
+        if(!string.IsNullOrWhiteSpace(saved?.CustomName))d.CustomName=saved.CustomName;
+        _selectedDevice=d;
+        App.ConfigStore.Config.SelectedDeviceFingerprint=d.Fingerprint;
+        App.ConfigStore.Config.Devices.RemoveAll(x=>x.Fingerprint==d.Fingerprint);
+        App.ConfigStore.Config.Devices.Add(d);
+        App.ConfigStore.Save();
+        RefreshDeviceDisplay();
+    }
+
+    private static string DisplayDeviceName(DeviceDefinition d)
+        => string.IsNullOrWhiteSpace(d.CustomName)?d.FriendlyName:d.CustomName!;
+
+    private void RenameDevice_Click(object sender,RoutedEventArgs e)
+    {
+        if(_selectedDevice is null){FooterStatus.Text="Selecione um dispositivo antes de renomear.";return;}
+        var input=new TextBox{Text=DisplayDeviceName(_selectedDevice),MaxLength=80};
+        var dialog=UI.ModalChrome.Create(this,"Renomear dispositivo","Use um nome fácil de reconhecer. O nome técnico e o fingerprint continuam preservados.",input,"Salvar nome",()=>
+        {
+            var value=input.Text.Trim();
+            if(string.IsNullOrWhiteSpace(value))return false;
+            _selectedDevice.CustomName=value;
+            var saved=App.ConfigStore.Config.Devices.FirstOrDefault(x=>x.Fingerprint==_selectedDevice.Fingerprint);
+            if(saved is null){saved=_selectedDevice;App.ConfigStore.Config.Devices.Add(saved);}
+            saved.CustomName=value;
+            _activeLayout.Name=value;
+            App.ConfigStore.Save();
+            RefreshDeviceDisplay();
+            return true;
+        });
+        dialog.Loaded+=(_,_)=>{input.Focus();input.SelectAll();};
+        dialog.ShowDialog();
     }
 
     private void Key_Click(object sender,RoutedEventArgs e)
@@ -208,10 +301,22 @@ public partial class MainWindow : Window
         if(DeviceLayoutCatalog.GetKey(_activeLayout,key) is null && !PhysicalKeyMap.ScanCodes.ContainsKey(key))return;
         _selectedKey=key;
         foreach(var tile in FindVisualChildren<KeyTileControl>(KeypadGrid)) tile.IsSelectedKey=Equals(tile.Tag,_selectedKey);
-        SelectedKeyText.Text=_selectedKey; UpdateSelectedAction();
+        SelectedKeyText.Text=KeyDisplayName(_selectedKey); UpdateSelectedAction();
     }
+    private string KeyDisplayName(string id)
+        => DeviceLayoutCatalog.GetKey(_activeLayout,id)?.Label is { Length:>0 } label?label:id;
+
+    private bool IsReservedKey(string id)
+        => DeviceLayoutCatalog.GetKey(_activeLayout,id)?.ReservedToggle==true;
+
     private void UpdateSelectedAction()
     {
+        if(IsReservedKey(_selectedKey))
+        {
+            CurrentActionTitle.Text="Ativar / Desativar Switch Keypad";
+            CurrentActionSubtitle.Text="Num Lock é reservado e mantém sua função normal no Windows.";
+            return;
+        }
         var m=FindMapping(_selectedKey);
         CurrentActionTitle.Text=m?.Action.Name ?? "Sem ação";
         CurrentActionSubtitle.Text=m is null?"Sem ação":ActionEditorWindow.Label(m.Action.Type);
@@ -219,6 +324,7 @@ public partial class MainWindow : Window
 
     private void ClearKey_Click(object sender,RoutedEventArgs e)
     {
+        if(IsReservedKey(_selectedKey)){FooterStatus.Text="Num Lock é reservado para ligar/desligar o Switch Keypad.";return;}
         var m=FindMapping(_selectedKey); if(m is null) return; m.Action=new ActionDefinition{Type=ActionType.Disabled,Name="Sem ação"}; UpdateSelectedAction(); RefreshKeyTiles();
     }
     private KeyMapping EnsureMapping()
@@ -235,11 +341,16 @@ public partial class MainWindow : Window
         };
         App.ConfigStore.ActiveProfile.Mappings.Add(mapping);return mapping;
     }
-    private void ChangeAction_Click(object sender,RoutedEventArgs e) => ShowActionEditor(EnsureMapping());
+    private void ChangeAction_Click(object sender,RoutedEventArgs e)
+    {
+        if(IsReservedKey(_selectedKey)){FooterStatus.Text="Num Lock é reservado para ligar/desligar o Switch Keypad.";return;}
+        ShowActionEditor(EnsureMapping());
+    }
     private void ActionType_Click(object sender,RoutedEventArgs e)
     {
         if(sender is Button b && Enum.TryParse<ActionType>((string)b.Tag,out var t))
         {
+            if(IsReservedKey(_selectedKey)){FooterStatus.Text="Num Lock é reservado para ligar/desligar o Switch Keypad.";return;}
             var mapping=EnsureMapping();
             var candidate=mapping.Action.Type==t?mapping.Action:new ActionDefinition{Type=t,Name=ActionEditorWindow.Label(t)};
             var dialog=new ActionEditorWindow(candidate){Owner=this};
@@ -258,40 +369,70 @@ public partial class MainWindow : Window
     private void StartupCheck_Changed(object sender,RoutedEventArgs e){if(!IsLoaded)return;StartupService.SetEnabled(StartupCheck.IsChecked==true);App.ConfigStore.Config.StartWithWindows=StartupCheck.IsChecked==true;App.ConfigStore.Save();}
     private void TestMode_Click(object sender,RoutedEventArgs e)
     {
-        _identifyMode=!_identifyMode;
-        _sessions.CancelAll();
-        lock(_pressedScans)_pressedScans.Clear();
-        if(_identifyMode)
+        if(_selectedDevice is null){FooterStatus.Text="Selecione um teclado antes de identificar as teclas.";return;}
+        _sessions.CancelAll();lock(_pressedScans)_pressedScans.Clear();CancelBursts();
+        _identifyMode=true;_interception.Stop();UpdateRunState();
+
+        var previous=_activeLayout;
+        var dialog=new DeviceLayoutWizardWindow(_selectedDevice,previous){Owner=this};
+        var accepted=dialog.ShowDialog()==true;
+        _identifyMode=false;
+
+        if(accepted)
         {
-            _interception.Stop();
-            FooterStatus.Text="Identificação ativa — pressione todas as teclas do dispositivo. Clique novamente para concluir.";
-        }
-        else
-        {
-            _activeLayout.Confirmed=true;
+            var updated=dialog.Layout;
+            MigrateMappings(previous,updated);
+            App.ConfigStore.Config.DeviceLayouts.RemoveAll(x=>x.DeviceFingerprint==_selectedDevice.Fingerprint);
+            App.ConfigStore.Config.DeviceLayouts.Add(updated);
+            _activeLayout=updated;
             App.ConfigStore.Save();
-            RefreshDeviceDisplay();
-            FooterStatus.Text="Layout do dispositivo salvo.";
+            RenderKeypad();RefreshKeyTiles();
+            FooterStatus.Text=updated.Confirmed?"Layout identificado e salvo.":"Layout salvo parcialmente — você pode continuar a identificação depois.";
         }
-        UpdateRunState();
+        RefreshDeviceDisplay();
+    }
+
+    private void MigrateMappings(DeviceLayoutDefinition previous,DeviceLayoutDefinition updated)
+    {
+        foreach(var profile in App.ConfigStore.Config.Profiles)
+        foreach(var mapping in profile.Mappings)
+        {
+            var old=DeviceLayoutCatalog.GetKey(previous,mapping.PhysicalKey)
+                    ?? previous.Keys.FirstOrDefault(k=>k.ScanCode==mapping.ScanCode&&k.IsExtended==mapping.IsExtended);
+            if(old is null)continue;
+            var replacement=updated.Keys.FirstOrDefault(k=>k.ScanCode==old.ScanCode&&k.IsExtended==old.IsExtended&&Math.Max(1,k.PressCount)==Math.Max(1,old.PressCount))
+                            ?? updated.Keys.FirstOrDefault(k=>string.Equals(k.Label,old.Label,StringComparison.OrdinalIgnoreCase));
+            if(replacement is null)continue;
+            mapping.PhysicalKey=replacement.Id;mapping.ScanCode=replacement.ScanCode;mapping.VirtualKey=replacement.VirtualKey;mapping.IsExtended=replacement.IsExtended;
+        }
     }
 
     private void ToggleEnabled_Click(object sender,RoutedEventArgs e)
+        => SetEnabled(!App.ConfigStore.Config.Enabled,"Controle da interface");
+
+    private void ToggleEnabledFromNumLock()
     {
-        if (App.ConfigStore.Config.Enabled)
-        {
-            App.ConfigStore.Config.Enabled=false;
-            _sessions.CancelAll();_pressedScans.Clear();
-            _interception.Stop();
-        }
-        else
-        {
-            App.ConfigStore.Config.Enabled=true;
-            if (_selectedDevice is not null && _interception.State==InterceptionState.Ready)
-                _interception.TryStart(_selectedDevice,ShouldConsume);
-        }
+        var now=DateTimeOffset.UtcNow;
+        if((now-_lastNumLockToggle).TotalMilliseconds<250)return;
+        _lastNumLockToggle=now;
+        SetEnabled(!App.ConfigStore.Config.Enabled,"Num Lock");
+    }
+
+    private void SetEnabled(bool enabled,string source)
+    {
+        App.ConfigStore.Config.Enabled=enabled;
+        _sessions.CancelAll();lock(_pressedScans)_pressedScans.Clear();CancelBursts();
+        if(!enabled)_interception.Stop();
+        else if(_selectedDevice is not null&&_interception.State==InterceptionState.Ready)_interception.TryStart(_selectedDevice,ShouldConsume);
         App.ConfigStore.Save();
         UpdateRunState();
+        FooterStatus.Text=enabled?$"Switch Keypad ativado por {source}.":$"Switch Keypad desativado por {source}. Num Lock continua funcionando normalmente.";
+    }
+
+    private void CancelBursts()
+    {
+        foreach(var state in _bursts.Values){state.Cancellation?.Cancel();state.Cancellation?.Dispose();}
+        _bursts.Clear();
     }
 
     private void NewProfile_Click(object sender,RoutedEventArgs e){App.ConfigStore.CreateProfile();SyncProfile();}
@@ -334,7 +475,12 @@ public partial class MainWindow : Window
 
     private void Settings_Click(object sender,RoutedEventArgs e){new SettingsWindow(_interception){Owner=this}.ShowDialog();UpdateRunState();}
     private void TabKeys_Click(object sender,RoutedEventArgs e)=>FooterStatus.Text="Teclas";
-    private void TabActions_Click(object sender,RoutedEventArgs e){ActionScroll.ScrollToTop();ShowActionEditor(EnsureMapping());}
+    private void TabActions_Click(object sender,RoutedEventArgs e)
+    {
+        ActionScroll.ScrollToTop();
+        if(IsReservedKey(_selectedKey)){FooterStatus.Text="Num Lock é reservado para ligar/desligar o Switch Keypad.";return;}
+        ShowActionEditor(EnsureMapping());
+    }
     private void TabProfiles_Click(object sender,RoutedEventArgs e)=>ProfileMenu_Click(sender,e);
     private void TabDevice_Click(object sender,RoutedEventArgs e)=>DeviceButton_Click(sender,e);
 
@@ -351,9 +497,9 @@ public partial class MainWindow : Window
 
         if (_selectedDevice is null)
         {
-            HeaderStatusText.Text="Selecione o numpad dedicado"; HeaderStatusText.Foreground=WarningBrush; HeaderStatusDot.Fill=WarningBrush;
+            HeaderStatusText.Text="Selecione um teclado"; HeaderStatusText.Foreground=WarningBrush; HeaderStatusDot.Fill=WarningBrush;
             RunStateText.Text="Aguardando"; RunStateText.Foreground=WarningBrush; RunStateIcon.Foreground=WarningBrush; RunStateButton.Background=amberBg; RunStateButton.BorderBrush=amberBorder;
-            FooterStatus.Text="Selecione um teclado/numpad dedicado"; FooterStatusDot.Fill=WarningBrush;
+            FooterStatus.Text="Selecione qualquer teclado conectado"; FooterStatusDot.Fill=WarningBrush;
         }
         else if (!App.ConfigStore.Config.Enabled)
         {
@@ -384,8 +530,10 @@ public partial class MainWindow : Window
 
         var columns=Math.Max(1,_activeLayout.Columns);
         var rows=Math.Max(1,_activeLayout.Keys.Count==0?5:_activeLayout.Keys.Max(k=>k.Row+Math.Max(1,k.RowSpan)));
-        for(int i=0;i<rows;i++)KeypadGrid.RowDefinitions.Add(new RowDefinition());
-        for(int i=0;i<columns;i++)KeypadGrid.ColumnDefinitions.Add(new ColumnDefinition());
+        for(int i=0;i<rows;i++)KeypadGrid.RowDefinitions.Add(new RowDefinition{Height=new GridLength(120)});
+        for(int i=0;i<columns;i++)KeypadGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(120)});
+        KeypadGrid.Width=Math.Max(500,columns*120);
+        KeypadGrid.Height=Math.Max(620,rows*120);
 
         foreach(var key in _activeLayout.Keys.OrderBy(k=>k.Row).ThenBy(k=>k.Column))
         {
@@ -395,7 +543,8 @@ public partial class MainWindow : Window
                 Tag=key.Id,
                 Margin=new Thickness(4),
                 IsSelectedKey=string.Equals(key.Id,_selectedKey,StringComparison.OrdinalIgnoreCase),
-                Shape=key.RowSpan>1?"vertical":key.ColumnSpan>1?"horizontal":"square"
+                Shape=key.RowSpan>1?"vertical":key.ColumnSpan>1?"horizontal":"square",
+                ActionLabel=key.ReservedToggle?"Ativar / Desativar":(FindMapping(key.Id)?.Action.Name ?? (key.ScanCode<0?"Não identificado":"Sem ação"))
             };
             tile.Click+=Key_Click;
             Grid.SetRow(tile,Math.Max(0,key.Row));
@@ -407,8 +556,9 @@ public partial class MainWindow : Window
 
         if(_activeLayout.Keys.Count>0 && DeviceLayoutCatalog.GetKey(_activeLayout,_selectedKey) is null)
             _selectedKey=_activeLayout.Keys[0].Id;
-        SelectedKeyText.Text=_selectedKey;
+        SelectedKeyText.Text=KeyDisplayName(_selectedKey);
         UpdateSelectedAction();
+        RefreshKeyTiles();
     }
 
     private async void RefreshKeyTiles()
@@ -418,9 +568,10 @@ public partial class MainWindow : Window
         foreach (var tile in FindVisualChildren<KeyTileControl>(KeypadGrid))
         {
             if (tile.Tag is not string key) continue;
+            var definition=DeviceLayoutCatalog.GetKey(_activeLayout,key);
             var mapping=FindMapping(key);
-            tile.ActionLabel=mapping?.Action.Name ?? "Sem ação";
-            tile.IconText=mapping?.Action.Type switch
+            tile.ActionLabel=definition?.ReservedToggle==true?"Ativar / Desativar":mapping?.Action.Name ?? (definition?.ScanCode<0?"Não identificado":"Sem ação");
+            tile.IconText=definition?.ReservedToggle==true?"⏻":mapping?.Action.Type switch
             {
                 ActionType.OpenApplication => "▦", ActionType.OpenFolder => "▭", ActionType.OpenUrl => "🌐",
                 ActionType.WebSearch => "⌕", ActionType.SendHotkey => "⌨", ActionType.TypeText => "Tᵀ",
@@ -478,13 +629,20 @@ public partial class MainWindow : Window
     private void Minimize_Click(object sender,RoutedEventArgs e)=>WindowState=WindowState.Minimized;
     private void Maximize_Click(object sender,RoutedEventArgs e)=>WindowState=WindowState==WindowState.Maximized?WindowState.Normal:WindowState.Maximized;
     private void Close_Click(object sender,RoutedEventArgs e){_sessions.CancelAll();Hide();}
-    private void StopActions_Click(object sender,RoutedEventArgs e){_sessions.CancelAll();FooterStatus.Text="Sequências interrompidas";}
+    private void StopActions_Click(object sender,RoutedEventArgs e){_sessions.CancelAll();CancelBursts();FooterStatus.Text="Sequências interrompidas";}
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e){_sessions.CancelAll();base.OnClosing(e);}
     private void Window_StateChanged(object sender,EventArgs e){ }
-    protected override void OnClosed(EventArgs e){_iconGeneration++;_sessions.CancelAll();App.RawInput.KeyEvent-=RawInput_KeyEvent;_interception.Dispose();base.OnClosed(e);}
-    public void StopCapture(){App.ConfigStore.Config.Enabled=false;_sessions.CancelAll();_pressedScans.Clear();_interception.Stop();UpdateRunState();}
+    protected override void OnClosed(EventArgs e){_iconGeneration++;_sessions.CancelAll();CancelBursts();App.RawInput.KeyEvent-=RawInput_KeyEvent;_interception.Dispose();base.OnClosed(e);}
+    public void StopCapture()=>SetEnabled(false,"Parada");
     public void ToggleCapture()=>ToggleEnabled_Click(this,new RoutedEventArgs());
     public void DisposeInput(){_sessions.CancelAll();_interception.Dispose();}
+
+    private sealed class BurstState
+    {
+        public DeviceKeyEvent Event { get; set; } = new("",0,0,false,true,DateTimeOffset.MinValue);
+        public int Count { get; set; }
+        public CancellationTokenSource? Cancellation { get; set; }
+    }
 
     [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X,Y; }
     [StructLayout(LayoutKind.Sequential)] private struct MinMaxInfo { public NativePoint Reserved,MaxSize,MaxPosition,MinTrackSize,MaxTrackSize; }
