@@ -1,0 +1,12 @@
+<Window x:Class="SwitchKeypad.SettingsWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Configurações" Width="720" Height="560" WindowStartupLocation="CenterOwner" Background="#071421" Foreground="White" ResizeMode="NoResize">
+    <Grid Margin="26"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <StackPanel><TextBlock Text="Configurações" FontSize="26" FontWeight="Bold"/><TextBlock Text="Status técnico e comportamento do Switch Keypad" Foreground="#9DB5CC" Margin="0,5,0,20"/></StackPanel>
+        <StackPanel Grid.Row="1">
+            <Border Background="#0B1F2F" BorderBrush="#1C3B52" BorderThickness="1" CornerRadius="10" Padding="16"><StackPanel><TextBlock Text="Camada de Entrada" FontWeight="Bold" FontSize="17"/><TextBlock x:Name="InputStatus" Foreground="#3DDAAC" Margin="0,8,0,3"/><TextBlock x:Name="InputDetail" Foreground="#9DB5CC" TextWrapping="Wrap"/></StackPanel></Border>
+            <Border Background="#0B1F2F" BorderBrush="#1C3B52" BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,12,0,0"><StackPanel><TextBlock Text="Privacidade" FontWeight="Bold" FontSize="17"/><TextBlock Text="Sem conta, sem cloud e sem telemetria. Configurações ficam em %LOCALAPPDATA%\\SwitchKeypad." Foreground="#9DB5CC" TextWrapping="Wrap" Margin="0,8,0,0"/></StackPanel></Border>
+            <Border Background="#0B1F2F" BorderBrush="#1C3B52" BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,12,0,0"><StackPanel><TextBlock Text="Parada de emergência" FontWeight="Bold" FontSize="17"/><TextBlock Text="Interrompe as sequências e devolve o teclado ao funcionamento normal. O modo exclusivo também é desligado ao sair do aplicativo." Foreground="#9DB5CC" TextWrapping="Wrap" Margin="0,8,0,12"/><Button Style="{StaticResource FlatButton}" Content="Desativar captura agora" Width="220" HorizontalAlignment="Left" Click="Stop_Click"/></StackPanel></Border>
+        </StackPanel>
+        <Button Grid.Row="2" Style="{StaticResource PrimaryButton}" Content="Fechar" Width="120" HorizontalAlignment="Right" Click="Close_Click"/>
+    </Grid>
+</Window>

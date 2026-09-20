@@ -1,0 +1,1037 @@
+# HANDOFF DE DESENVOLVIMENTO — SWITCH KEYPAD v0.3.0
+
+**Projeto:** Switch Keypad  
+**Release alvo:** v0.3.0  
+**Base obrigatória:** Switch Keypad v0.2.0 funcional  
+**Regra principal:** evoluir a v0.2.0 existente. NÃO recriar o sistema do zero.
+
+---
+
+# 1. OBJETIVO
+
+Implementar a próxima versão oficial do Switch Keypad preservando integralmente a base funcional v0.2.0, seu design, arquitetura, assets, sistema de captura de teclado, persistência e funcionalidades existentes.
+
+A v0.3.0 deve adicionar:
+
+- novos perfis completamente vazios;
+- exclusão de perfis;
+- renomear/excluir pelo menu de três pontos;
+- ícones reais dos aplicativos nas teclas;
+- texto personalizado;
+- sequências/macros;
+- delays;
+- looping;
+- repetição por quantidade;
+- repetição até cancelamento;
+- cancelamento seguro;
+- persistência compatível com v0.2.0.
+
+---
+
+# 2. REGRA DE CONTINUIDADE
+
+A v0.2.0 FUNCIONAL é a fonte de verdade.
+
+Antes de modificar qualquer coisa:
+
+1. auditar a v0.2.0;
+2. localizar armazenamento de perfis;
+3. localizar mappings das teclas;
+4. localizar Action Engine;
+5. localizar execução de hotkeys;
+6. localizar envio de texto;
+7. localizar execução de aplicativos;
+8. localizar sistema de input do numpad;
+9. localizar renderização das teclas;
+10. localizar persistência/config;
+11. localizar inicialização/tray;
+12. somente depois alterar.
+
+NÃO trocar framework apenas por conveniência.
+
+NÃO recriar a UI.
+
+NÃO quebrar compatibilidade com configurações existentes.
+
+---
+
+# 3. DESIGN CONGELADO
+
+O design atual aprovado deve ser mantido.
+
+Preservar:
+
+- fundo navy/dark;
+- azul/ciano;
+- interface sem sidebar;
+- cabeçalho superior;
+- organização atual;
+- dispositivo e perfil no topo;
+- keypad central;
+- editor de ação;
+- cards;
+- bordas arredondadas;
+- tipografia;
+- espaçamentos;
+- proporções;
+- estados normal/hover/select.
+
+Os assets das teclas já existentes devem continuar sendo usados.
+
+Não redesenhar:
+
+- tecla normal;
+- tecla hover;
+- tecla select;
+- tecla vertical;
+- tecla horizontal/larga.
+
+O conteúdo deve ser colocado sobre esses assets.
+
+---
+
+# 4. NOVO PERFIL SEM AÇÕES
+
+Atualmente pode existir criação de perfil com ações pré-definidas.
+
+REMOVER esse comportamento.
+
+Ao criar:
+
+`Novo perfil`
+
+o resultado deve ser:
+
+Todas as teclas = SEM AÇÃO.
+
+Nenhuma tecla deve automaticamente:
+
+- abrir navegador;
+- abrir aplicativo;
+- controlar mídia;
+- executar hotkey;
+- conter texto;
+- possuir exemplo;
+- copiar outro perfil.
+
+Regra:
+
+Novo perfil = vazio.
+
+Duplicar perfil, se existir = cópia do perfil original.
+
+Perfis existentes da v0.2.0 NÃO devem ser alterados.
+
+---
+
+# 5. MENU DE PERFIL
+
+No menu de três pontos do perfil adicionar:
+
+- Renomear perfil
+- Excluir perfil
+
+---
+
+# 6. RENOMEAR PERFIL
+
+Ao selecionar `Renomear perfil`:
+
+- mostrar nome atual;
+- permitir edição;
+- remover espaços desnecessários nas extremidades;
+- impedir nome vazio;
+- salvar;
+- atualizar UI imediatamente;
+- persistir após reiniciar.
+
+Não alterar mappings do perfil.
+
+---
+
+# 7. EXCLUIR PERFIL
+
+Ao selecionar `Excluir perfil`, mostrar confirmação.
+
+Exemplo:
+
+Excluir perfil?
+
+Tem certeza que deseja excluir o perfil "Perfil 3"?
+
+Esta ação removerá as configurações deste perfil.
+
+[Cancelar] [Excluir]
+
+Requisitos:
+
+- não excluir sem confirmação;
+- excluir apenas o perfil selecionado;
+- não afetar outros perfis;
+- persistir imediatamente.
+
+Se o perfil excluído for o ativo:
+
+1. selecionar outro perfil;
+2. carregar os mappings desse perfil;
+3. atualizar o keypad;
+4. persistir o novo perfil ativo.
+
+O sistema nunca pode ficar em estado inválido.
+
+Caso seja o último perfil:
+
+preferencialmente criar automaticamente um novo `Perfil 1` vazio.
+
+Alternativamente bloquear a exclusão do último perfil.
+
+---
+
+# 8. ÍCONE REAL DO APLICATIVO
+
+Quando a ação for:
+
+`Abrir Aplicativo`
+
+a tecla deve mostrar o ícone real do aplicativo selecionado.
+
+Exemplos:
+
+Discord → ícone do Discord  
+Chrome → ícone do Chrome  
+VS Code → ícone do VS Code  
+OBS → ícone do OBS  
+Spotify → ícone do Spotify
+
+Não baixar logos da internet.
+
+Extrair do próprio Windows/aplicativo:
+
+- .exe;
+- .lnk;
+- Windows Shell;
+- recursos de ícone do executável;
+- atalhos do Start Menu;
+- AppUserModel quando aplicável.
+
+---
+
+# 9. CACHE DE ÍCONES
+
+Não extrair o ícone toda vez que a UI renderizar.
+
+Criar cache.
+
+Exemplo:
+
+%LOCALAPPDATA%\SwitchKeypad\Cache\Icons\
+
+O caminho pode ser adaptado à estrutura já existente.
+
+Se não conseguir recuperar o ícone:
+
+usar ícone genérico.
+
+Nunca quebrar a tecla.
+
+---
+
+# 10. VISUAL DA TECLA DE APLICATIVO
+
+Exemplo:
+
+[ícone Discord]
+
+Discord
+
+O ícone deve ser o elemento visual principal.
+
+Se a UI já mostra discretamente o número físico da tecla, pode continuar mostrando.
+
+Não modificar o desenho do keycap.
+
+---
+
+# 11. TEXTO PERSONALIZADO
+
+Criar/evoluir:
+
+`Texto Personalizado`
+
+O usuário configura uma frase.
+
+Exemplo:
+
+"Vamos para o hospital"
+
+Ao pressionar a tecla do numpad:
+
+o Switch Keypad digita o texto na janela atualmente ativa.
+
+Suportar:
+
+- espaços;
+- acentos;
+- pontuação;
+- letras;
+- números;
+- caracteres PT-BR.
+
+Não registrar o conteúdo do texto completo em logs por padrão.
+
+---
+
+# 12. SEQUÊNCIA DE AÇÕES
+
+Adicionar um editor real de sequência/macro.
+
+Uma tecla pode executar várias ações, uma após a outra.
+
+Exemplo solicitado:
+
+Numpad 1
+
+1. Pressionar T
+2. Esperar 100 ms
+3. Digitar "Vamos para o hospital"
+4. Esperar 50 ms
+5. Pressionar Enter
+
+Resultado:
+
+T → texto → Enter.
+
+---
+
+# 13. TIPOS DE ETAPA
+
+Uma sequência deve aceitar, no mínimo:
+
+- pressionar tecla;
+- hotkey;
+- texto;
+- delay;
+- abrir aplicativo;
+- abrir arquivo;
+- abrir pasta;
+- abrir URL;
+- pesquisa web;
+- mídia;
+- ação de sistema.
+
+Reutilizar executores existentes na v0.2.0.
+
+Não criar mecanismos duplicados sem necessidade.
+
+---
+
+# 14. EDITOR DE SEQUÊNCIA
+
+Permitir:
+
+- adicionar etapa;
+- editar etapa;
+- excluir etapa;
+- mover para cima;
+- mover para baixo;
+- testar;
+- salvar;
+- cancelar.
+
+Visual deve seguir exatamente a UI já existente.
+
+---
+
+# 15. DELAY
+
+Criar ação:
+
+`Esperar`
+
+Valor configurado em milissegundos.
+
+Exemplos:
+
+50 ms  
+100 ms  
+250 ms  
+500 ms  
+1000 ms
+
+Sugestão de limites:
+
+mínimo: 10 ms  
+máximo por etapa: 60.000 ms
+
+Não aceitar valores negativos.
+
+---
+
+# 16. LOOP
+
+Cada sequência deve possuir configuração de repetição.
+
+Modos:
+
+- Executar uma vez
+- Repetir N vezes
+- Repetir até interromper
+
+---
+
+# 17. REPETIR N VEZES
+
+Exemplo:
+
+Quantidade: 5
+
+Fluxo:
+
+sequência  
+→ intervalo  
+→ sequência  
+→ intervalo  
+→ ...
+
+até completar 5 ciclos.
+
+---
+
+# 18. LOOP CONTÍNUO
+
+Modo:
+
+`Repetir até interromper`
+
+A sequência continua rodando até cancelamento.
+
+Nunca criar loop infinito sem mecanismo confiável de parada.
+
+---
+
+# 19. INTERVALO ENTRE LOOPS
+
+Adicionar:
+
+`Intervalo entre repetições`
+
+Exemplo:
+
+1000 ms.
+
+Isso é separado dos delays internos da macro.
+
+---
+
+# 20. CANCELAMENTO
+
+Uma macro contínua deve parar quando:
+
+- a mesma tecla for pressionada novamente;
+- usuário clicar em Parar;
+- Switch Keypad for desativado;
+- perfil for trocado;
+- aplicativo for fechado;
+- emergency stop for acionado.
+
+Cancelamento deve ser limpo.
+
+Nenhuma tecla pode permanecer presa.
+
+---
+
+# 21. EXECUÇÃO ASSÍNCRONA
+
+Não executar macro longa na UI thread.
+
+Interface deve continuar utilizável.
+
+Utilizar a arquitetura equivalente a:
+
+Task  
+CancellationToken  
+ExecutionSession
+
+ou o mecanismo já adotado no projeto.
+
+---
+
+# 22. AUTO-REPEAT
+
+Segurar fisicamente uma tecla não pode disparar dezenas de macros.
+
+Padrão:
+
+KeyDown inicial → executa.
+
+Auto-repeat → ignora.
+
+KeyUp → libera novo trigger.
+
+Loop deve ser responsabilidade do Sequence Engine.
+
+---
+
+# 23. REENTRÂNCIA
+
+Se a mesma macro já estiver executando:
+
+Execução única:
+não iniciar outra instância.
+
+Loop contínuo:
+pressionar novamente cancela.
+
+Evitar sobreposição acidental.
+
+---
+
+# 24. JANELA ATIVA
+
+Textos, hotkeys e teclas devem ser enviados para a aplicação atualmente em foco.
+
+Exemplo:
+
+jogo está ativo  
+→ usuário pressiona Numpad 1  
+→ Switch Keypad executa T  
+→ escreve frase  
+→ Enter.
+
+Não direcionar automaticamente para o próprio Switch Keypad.
+
+---
+
+# 25. MODELO DE SEQUÊNCIA
+
+Exemplo conceitual:
+
+{
+  "type": "sequence",
+  "repeat": {
+    "mode": "once",
+    "count": 1,
+    "intervalMs": 0
+  },
+  "steps": [
+    {
+      "type": "key",
+      "key": "T"
+    },
+    {
+      "type": "delay",
+      "milliseconds": 100
+    },
+    {
+      "type": "text",
+      "value": "Vamos para o hospital"
+    },
+    {
+      "type": "delay",
+      "milliseconds": 50
+    },
+    {
+      "type": "key",
+      "key": "ENTER"
+    }
+  ]
+}
+
+---
+
+# 26. MODOS DE REPETIÇÃO
+
+Once:
+
+{
+  "mode": "once"
+}
+
+Count:
+
+{
+  "mode": "count",
+  "count": 5,
+  "intervalMs": 1000
+}
+
+UntilCancelled:
+
+{
+  "mode": "untilCancelled",
+  "intervalMs": 1000
+}
+
+Os nomes podem ser adaptados à arquitetura real.
+
+---
+
+# 27. COMPATIBILIDADE v0.2.0
+
+A configuração antiga deve continuar funcionando.
+
+NÃO exigir que o usuário refaça os perfis.
+
+Se houver schemaVersion, criar migração.
+
+A migração deve:
+
+1. carregar config da v0.2.0;
+2. preservar perfis;
+3. preservar mappings;
+4. adicionar campos novos;
+5. usar defaults seguros;
+6. salvar somente após migração válida.
+
+Defaults:
+
+repeat.mode = once  
+repeat.count = 1  
+repeat.intervalMs = 0
+
+Ações simples não precisam ser transformadas em sequência.
+
+---
+
+# 28. STATUS DA MACRO
+
+A UI pode informar discretamente:
+
+Executando  
+Concluído  
+Interrompido  
+Erro
+
+Sem poluir a interface.
+
+---
+
+# 29. LOG
+
+Não guardar conteúdo completo de texto personalizado por padrão.
+
+Permitido:
+
+14:32:10 — Tecla 1 — sequência iniciada  
+14:32:10 — etapa key executada  
+14:32:10 — etapa delay executada  
+14:32:11 — sequência concluída
+
+Não registrar frases privadas digitadas pelo usuário.
+
+---
+
+# 30. ERROS DE SEQUÊNCIA
+
+Se uma etapa essencial falhar:
+
+- parar sequência;
+- não continuar cegamente;
+- retornar erro discreto;
+- liberar recursos;
+- liberar teclas;
+- encerrar ExecutionSession.
+
+---
+
+# 31. APLICATIVO NÃO ENCONTRADO
+
+Se um executável configurado deixar de existir:
+
+- não travar;
+- não apagar mapping automaticamente;
+- mostrar ação como indisponível;
+- permitir editar caminho;
+- utilizar ícone fallback.
+
+---
+
+# 32. ARQUITETURA RECOMENDADA
+
+Reutilizar componentes da v0.2.0.
+
+Conceitualmente:
+
+Profiles  
+Actions  
+Sequences  
+Execution  
+Icons  
+Persistence  
+Input  
+UI
+
+Possíveis componentes:
+
+ActionExecutor  
+SequenceExecutor  
+SequenceStep  
+RepeatPolicy  
+ExecutionSession  
+CancellationManager  
+ApplicationIconService  
+ProfileService
+
+Não criar classes redundantes caso já existam equivalentes.
+
+---
+
+# 33. EXECUTION SESSION
+
+Cada macro ativa deve ser identificável.
+
+Exemplo:
+
+mappingId  
+profileId  
+startedAt  
+CancellationToken  
+state
+
+Isso permite:
+
+- cancelar;
+- trocar perfil;
+- shutdown;
+- evitar execução duplicada.
+
+---
+
+# 34. ORDEM DA SEQUÊNCIA
+
+Etapas devem ser executadas estritamente em ordem.
+
+Step 1  
+await  
+Step 2  
+await  
+Step 3
+
+Nada de execução paralela dentro da mesma macro.
+
+---
+
+# 35. ENVIO DE TECLAS
+
+Reutilizar o mecanismo funcional da v0.2.0.
+
+Fluxo correto:
+
+T KeyDown  
+T KeyUp  
+Delay  
+Texto  
+Delay  
+Enter KeyDown  
+Enter KeyUp
+
+Nunca deixar uma tecla presa.
+
+---
+
+# 36. JOGOS
+
+Não prometer compatibilidade universal.
+
+Alguns jogos podem:
+
+- usar Raw Input;
+- bloquear SendInput;
+- possuir anti-cheat;
+- rodar elevados.
+
+Não tentar burlar anti-cheat.
+
+Implementar corretamente para softwares e jogos compatíveis.
+
+---
+
+# 37. TESTES — PERFIS
+
+Validar:
+
+[ ] criar perfil  
+[ ] nasce vazio  
+[ ] renomear  
+[ ] persistir nome  
+[ ] excluir  
+[ ] confirmação  
+[ ] excluir perfil ativo  
+[ ] trocar para perfil válido  
+[ ] tratar último perfil  
+[ ] reiniciar aplicativo  
+[ ] perfis preservados
+
+---
+
+# 38. TESTES — ÍCONE DE APP
+
+Validar:
+
+[ ] selecionar Chrome  
+[ ] mostrar ícone Chrome  
+[ ] selecionar Discord  
+[ ] mostrar ícone Discord  
+[ ] selecionar VS Code  
+[ ] reiniciar app  
+[ ] ícone permanece  
+[ ] cache funciona  
+[ ] fallback funciona  
+[ ] executável inexistente não quebra UI
+
+---
+
+# 39. TESTES — TEXTO
+
+Validar:
+
+[ ] texto simples  
+[ ] acentos  
+[ ] pontuação  
+[ ] espaços  
+[ ] números  
+[ ] Notepad  
+[ ] browser  
+[ ] aplicações compatíveis  
+[ ] jogos compatíveis
+
+---
+
+# 40. TESTES — SEQUÊNCIA
+
+Validar:
+
+T  
+→ 100 ms  
+→ texto  
+→ 50 ms  
+→ Enter
+
+Confirmar ordem exata.
+
+---
+
+# 41. TESTES — LOOP
+
+Validar:
+
+[ ] uma vez  
+[ ] 3 vezes  
+[ ] 10 vezes  
+[ ] loop contínuo  
+[ ] intervalo entre ciclos  
+[ ] cancelar pela mesma tecla  
+[ ] cancelar pela UI  
+[ ] cancelar ao trocar perfil  
+[ ] cancelar ao desativar  
+[ ] cancelar ao fechar
+
+---
+
+# 42. TESTES — INPUT
+
+Garantir que a v0.3.0 não quebre o objetivo principal:
+
+teclado principal funciona normalmente  
++  
+numpad dedicado executa mappings  
++  
+numpad dedicado não envia sua tecla original quando modo exclusivo está ativo.
+
+---
+
+# 43. PERFORMANCE
+
+Input deve continuar praticamente imediato.
+
+Extração de ícones não pode bloquear o input.
+
+Macros não podem congelar UI.
+
+Cachear operações caras.
+
+---
+
+# 44. SEGURANÇA
+
+Aplicar:
+
+- fail-safe;
+- cancelamento;
+- nenhuma elevação oculta;
+- nenhum script remoto;
+- nenhum loop impossível de parar;
+- validação de caminhos;
+- validação de parâmetros;
+- limites de etapas.
+
+Sugestão:
+
+máximo de 100 etapas por sequência.
+
+---
+
+# 45. DISTRIBUIÇÃO
+
+Release:
+
+`Switch Keypad v0.3.0`
+
+Entrega ideal ao usuário:
+
+`SwitchKeypad-Setup-v0.3.0.exe`
+
+Opcional:
+
+`SwitchKeypad-v0.3.0-portable.zip`
+
+O usuário NÃO deve precisar:
+
+- Visual Studio;
+- PowerShell;
+- .NET SDK manual;
+- compilação;
+- scripts;
+- edição de arquivos.
+
+---
+
+# 46. INSTALADOR
+
+Fluxo esperado:
+
+Welcome  
+→ Next  
+→ escolher pasta  
+→ escolher atalhos  
+→ Install  
+→ Finish  
+→ Abrir Switch Keypad.
+
+---
+
+# 47. PASTA INSTALADA
+
+Deve conter somente arquivos necessários para execução.
+
+Exemplo:
+
+Switch Keypad/
+├── SwitchKeypad.exe
+├── dependências necessárias
+├── Assets/
+└── uninstaller
+
+Não colocar na distribuição:
+
+README.md  
+CHANGELOG.md  
+ARCHITECTURE.md  
+source code  
+scripts de build  
+logs antigos  
+arquivos temporários  
+PDBs desnecessários
+
+---
+
+# 48. ORDEM DE IMPLEMENTAÇÃO
+
+1. Auditar v0.2.0
+2. Criar backup/snapshot
+3. Perfil novo vazio
+4. Renomear/excluir perfil
+5. Serviço de ícones
+6. Texto personalizado
+7. Sequence Engine
+8. Delay
+9. Loop
+10. Cancelamento
+11. Editor de sequência
+12. Migração
+13. Testes
+14. Regressão v0.2.0
+15. Build Release
+16. Instalador
+17. Pacote limpo
+
+---
+
+# 49. NÃO FAZER
+
+Não:
+
+- recriar o projeto;
+- trocar framework sem necessidade;
+- redesenhar UI;
+- adicionar sidebar;
+- mudar cores;
+- substituir assets aprovados;
+- remover ações existentes;
+- apagar perfis;
+- criar ações default em perfis novos;
+- criar loop sem cancelamento;
+- baixar logos da internet;
+- entregar somente source;
+- afirmar testes não executados.
+
+---
+
+# 50. DEFINITION OF DONE
+
+A v0.3.0 está pronta quando:
+
+1. Switch Keypad abre normalmente.
+2. Usuário cria Perfil 3.
+3. Perfil 3 nasce completamente vazio.
+4. Perfil pode ser renomeado.
+5. Perfil pode ser excluído.
+6. Usuário configura Numpad 1.
+7. Escolhe sequência.
+8. Adiciona T.
+9. Adiciona 100 ms.
+10. Adiciona texto "Vamos para o hospital".
+11. Adiciona 50 ms.
+12. Adiciona Enter.
+13. Configura repetição 5 vezes.
+14. Salva.
+15. Macro executa na ordem correta.
+16. Interface continua responsiva.
+17. Loop pode ser interrompido.
+18. Config permanece após reiniciar.
+19. Abrir Aplicativo mostra ícone real.
+20. Perfis antigos da v0.2.0 permanecem intactos.
+21. Teclado principal continua normal.
+22. Numpad dedicado continua isolado.
+23. Todas as funções da v0.2.0 continuam funcionando.
+24. Instalador v0.3.0 é gerado.
+25. Pasta instalada contém apenas arquivos necessários.
+
+---
+
+# REGRA FINAL
+
+A v0.3.0 deve evoluir o Switch Keypad de um simples mapeador para uma ferramenta de automação configurável, sem perder simplicidade.
+
+SIMPLES PARA AÇÃO BÁSICA  
++  
+PODEROSO PARA MACROS  
++  
+SEM QUEBRAR A v0.2.0  
++  
+SEM MUDAR O DESIGN  
++  
+PERFIL NOVO VAZIO  
++  
+ÍCONE REAL DO APLICATIVO  
++  
+TEXTO PERSONALIZADO  
++  
+SEQUÊNCIA DE AÇÕES  
++  
+LOOP CONTROLÁVEL  
++  
+CANCELAMENTO SEGURO
+
+**BASE OFICIAL: v0.2.0 funcional**  
+**PRÓXIMA RELEASE: v0.3.0**
