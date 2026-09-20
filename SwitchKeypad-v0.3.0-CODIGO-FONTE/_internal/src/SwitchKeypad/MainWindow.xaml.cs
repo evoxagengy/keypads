@@ -17,7 +17,8 @@ public partial class MainWindow : Window
 {
     private DeviceDefinition? _selectedDevice;
     private string _selectedKey = "0";
-    private bool _testMode;
+    private bool _identifyMode;
+    private DeviceLayoutDefinition _activeLayout = DeviceLayoutCatalog.LegacyTemplate("");
     private int _iconGeneration;
     private readonly Core.Actions.ExecutionSessions _sessions=new();
     private readonly IInterceptionProvider _interception = new InterceptionProvider();
@@ -75,6 +76,7 @@ public partial class MainWindow : Window
         StartupCheck.IsChecked = StartupService.IsEnabled();
         HeaderProfileName.Text = LeftProfileName.Text = App.ConfigStore.ActiveProfile.Name;
         RefreshDeviceDisplay();
+        RenderKeypad();
         RefreshKeyTiles();
         UpdateSelectedAction();
         if (Environment.GetCommandLineArgs().Any(a=>a.Equals("--minimized",StringComparison.OrdinalIgnoreCase))) Hide();
@@ -86,6 +88,7 @@ public partial class MainWindow : Window
         var devices = App.RawInput.EnumerateKeyboards();
         if (App.ConfigStore.Config.SelectedDeviceFingerprint is { Length:>0 } fp)
             _selectedDevice = devices.FirstOrDefault(d=>d.Fingerprint==fp);
+        _activeLayout = DeviceLayoutCatalog.Resolve(App.ConfigStore.Config,_selectedDevice);
         if (_selectedDevice is null)
         {
             _interception.Stop();
@@ -104,13 +107,17 @@ public partial class MainWindow : Window
             HeaderStatusText.Text="Dispositivo Conectado e Ativo";
             if (App.ConfigStore.Config.Enabled && _interception.State==InterceptionState.Ready) _interception.TryStart(_selectedDevice,ShouldConsume);
         }
+        RenderKeypad();
         UpdateRunState();
     }
 
+    private string? ResolvePhysicalKey(DeviceKeyEvent ev)
+        => DeviceLayoutCatalog.ResolveKey(_activeLayout,ev)?.Id ?? PhysicalKeyMap.Resolve(ev);
+
     private bool ShouldConsume(DeviceKeyEvent ev)
     {
-        if (!App.ConfigStore.Config.Enabled || _testMode || _selectedDevice is null) return false;
-        var mapping = PhysicalKeyMap.Resolve(ev) is string key?FindMapping(key):null;
+        if (!App.ConfigStore.Config.Enabled || _identifyMode || _selectedDevice is null) return false;
+        var mapping = ResolvePhysicalKey(ev) is string key?FindMapping(key):null;
         return mapping is not null && mapping.Action.Type != ActionType.PassThrough;
     }
 
@@ -118,11 +125,11 @@ public partial class MainWindow : Window
     {
         if(!Dispatcher.CheckAccess()){_ = Dispatcher.BeginInvoke(()=>Interception_KeyEvent(sender,e));return;}
         if (_selectedDevice is null || e.DeviceId!=_selectedDevice.Fingerprint) return;
-        if(e.IsKeyDown && PhysicalKeyMap.Resolve(e) is string physicalKey) SelectKey(physicalKey);
+        if(e.IsKeyDown && ResolvePhysicalKey(e) is string physicalKey) SelectKey(physicalKey);
         if (!e.IsKeyDown) { lock(_pressedScans) _pressedScans.Remove(e.ScanCode); return; }
         lock(_pressedScans) if(!_pressedScans.Add(e.ScanCode)) return;
-        var mapping=PhysicalKeyMap.Resolve(e) is string mappedKey?FindMapping(mappedKey):null;
-        if(mapping is not null && App.ConfigStore.Config.Enabled && !_testMode)
+        var mapping=ResolvePhysicalKey(e) is string mappedKey?FindMapping(mappedKey):null;
+        if(mapping is not null && App.ConfigStore.Config.Enabled && !_identifyMode)
         {
             var profileId=App.ConfigStore.ActiveProfile.Id;
             FooterStatus.Text=$"Tecla {mapping.PhysicalKey} — executando";
@@ -135,8 +142,16 @@ public partial class MainWindow : Window
     {
         if(!Dispatcher.CheckAccess()){_ = Dispatcher.BeginInvoke(()=>RawInput_KeyEvent(sender,e));return;}
         if (_selectedDevice is null || e.DeviceId != _selectedDevice.Fingerprint) return;
-        if(e.IsKeyDown && PhysicalKeyMap.Resolve(e) is string key) SelectKey(key);
-        if (_testMode) Dispatcher.Invoke(()=>FooterStatus.Text=$"Teste • Scan 0x{e.ScanCode:X2} • VK 0x{e.VirtualKey:X2} • {(e.IsKeyDown?"Down":"Up")}");
+        if(e.IsKeyDown && ResolvePhysicalKey(e) is string key) SelectKey(key);
+        if (_identifyMode && e.IsKeyDown)
+        {
+            if(DeviceLayoutCatalog.Observe(_activeLayout,e))
+            {
+                App.ConfigStore.Save();
+                RenderKeypad();
+            }
+            FooterStatus.Text=$"Identificação • Scan 0x{e.ScanCode:X2} • VK 0x{e.VirtualKey:X2} • {(e.IsExtended?"E0":"normal")}";
+        }
         // Raw Input identifies the physical source, but cannot suppress the normal keystroke.
         // Never execute mappings here: doing so would both run the action and type the key.
     }
@@ -190,7 +205,7 @@ public partial class MainWindow : Window
     }
     private void SelectKey(string key)
     {
-        if(!PhysicalKeyMap.ScanCodes.ContainsKey(key))return;
+        if(DeviceLayoutCatalog.GetKey(_activeLayout,key) is null && !PhysicalKeyMap.ScanCodes.ContainsKey(key))return;
         _selectedKey=key;
         foreach(var tile in FindVisualChildren<KeyTileControl>(KeypadGrid)) tile.IsSelectedKey=Equals(tile.Tag,_selectedKey);
         SelectedKeyText.Text=_selectedKey; UpdateSelectedAction();
@@ -209,7 +224,15 @@ public partial class MainWindow : Window
     private KeyMapping EnsureMapping()
     {
         var mapping=FindMapping(_selectedKey);if(mapping is not null)return mapping;
-        mapping=new KeyMapping{PhysicalKey=_selectedKey,ScanCode=PhysicalKeyMap.ScanCodes[_selectedKey],Action=new()};
+        var definition=DeviceLayoutCatalog.GetKey(_activeLayout,_selectedKey);
+        mapping=new KeyMapping
+        {
+            PhysicalKey=_selectedKey,
+            ScanCode=definition?.ScanCode ?? PhysicalKeyMap.ScanCodes.GetValueOrDefault(_selectedKey),
+            VirtualKey=definition?.VirtualKey ?? 0,
+            IsExtended=definition?.IsExtended ?? (_selectedKey is "/" or "Enter"),
+            Action=new()
+        };
         App.ConfigStore.ActiveProfile.Mappings.Add(mapping);return mapping;
     }
     private void ChangeAction_Click(object sender,RoutedEventArgs e) => ShowActionEditor(EnsureMapping());
@@ -233,7 +256,25 @@ public partial class MainWindow : Window
 
     private void Save_Click(object sender,RoutedEventArgs e){App.ConfigStore.Save();FooterStatus.Text="Alterações salvas";}
     private void StartupCheck_Changed(object sender,RoutedEventArgs e){if(!IsLoaded)return;StartupService.SetEnabled(StartupCheck.IsChecked==true);App.ConfigStore.Config.StartWithWindows=StartupCheck.IsChecked==true;App.ConfigStore.Save();}
-    private void TestMode_Click(object sender,RoutedEventArgs e){_testMode=!_testMode;_sessions.CancelAll();lock(_pressedScans)_pressedScans.Clear();if(_testMode)_interception.Stop();else RefreshDeviceDisplay();FooterStatus.Text=_testMode?"Modo de teste — pressione uma tecla no dispositivo selecionado":"Modo de teste desativado";}
+    private void TestMode_Click(object sender,RoutedEventArgs e)
+    {
+        _identifyMode=!_identifyMode;
+        _sessions.CancelAll();
+        lock(_pressedScans)_pressedScans.Clear();
+        if(_identifyMode)
+        {
+            _interception.Stop();
+            FooterStatus.Text="Identificação ativa — pressione todas as teclas do dispositivo. Clique novamente para concluir.";
+        }
+        else
+        {
+            _activeLayout.Confirmed=true;
+            App.ConfigStore.Save();
+            RefreshDeviceDisplay();
+            FooterStatus.Text="Layout do dispositivo salvo.";
+        }
+        UpdateRunState();
+    }
 
     private void ToggleEnabled_Click(object sender,RoutedEventArgs e)
     {
@@ -255,7 +296,7 @@ public partial class MainWindow : Window
 
     private void NewProfile_Click(object sender,RoutedEventArgs e){App.ConfigStore.CreateProfile();SyncProfile();}
     private void DuplicateProfile_Click(object sender,RoutedEventArgs e){var src=App.ConfigStore.ActiveProfile;var p=new ProfileDefinition{Name=src.Name+" - Cópia",Mappings=src.Mappings.Select(CloneMapping).ToList()};App.ConfigStore.Config.Profiles.Add(p);App.ConfigStore.Config.ActiveProfileId=p.Id;SyncProfile();}
-    private static KeyMapping CloneMapping(KeyMapping m)=>new(){PhysicalKey=m.PhysicalKey,ScanCode=m.ScanCode,VirtualKey=m.VirtualKey,Trigger=m.Trigger,Repeat=m.Repeat,Action=ActionEditorWindow.Copy(m.Action)};
+    private static KeyMapping CloneMapping(KeyMapping m)=>new(){PhysicalKey=m.PhysicalKey,ScanCode=m.ScanCode,VirtualKey=m.VirtualKey,IsExtended=m.IsExtended,Trigger=m.Trigger,Repeat=m.Repeat,Action=ActionEditorWindow.Copy(m.Action)};
     private void ProfileMenu_Click(object sender,RoutedEventArgs e){var menu=new ContextMenu();foreach(var p in App.ConfigStore.Config.Profiles){var mi=new MenuItem{Header=p.Name,Tag=p};mi.Click+=(_,_)=>{App.ConfigStore.Config.ActiveProfileId=p.Id;SyncProfile();};menu.Items.Add(mi);}menu.PlacementTarget=(UIElement)sender;menu.IsOpen=true;}
     private void SyncProfile(){_sessions.CancelAll();HeaderProfileName.Text=LeftProfileName.Text=App.ConfigStore.ActiveProfile.Name;App.ConfigStore.Save();UpdateSelectedAction();RefreshKeyTiles();}
     private void ProfileMore_Click(object sender,RoutedEventArgs e)
@@ -329,9 +370,45 @@ public partial class MainWindow : Window
         else
         {
             HeaderStatusText.Text="Conectado — exclusivo indisponível"; HeaderStatusText.Foreground=WarningBrush; HeaderStatusDot.Fill=WarningBrush;
-            RunStateText.Text="Somente Teste"; RunStateText.Foreground=WarningBrush; RunStateIcon.Foreground=WarningBrush; RunStateButton.Background=amberBg; RunStateButton.BorderBrush=amberBorder;
-            FooterStatus.Text=$"Ações bloqueadas por segurança • {_interception.StatusText}"; FooterStatusDot.Fill=WarningBrush;
+            RunStateText.Text=_identifyMode?"Identificando":"Monitorando"; RunStateText.Foreground=WarningBrush; RunStateIcon.Foreground=WarningBrush; RunStateButton.Background=amberBg; RunStateButton.BorderBrush=amberBorder;
+            FooterStatus.Text=_identifyMode?"Identificação de teclas ativa":$"Ações físicas aguardando modo exclusivo • {_interception.StatusText}"; FooterStatusDot.Fill=WarningBrush;
         }
+    }
+
+    private void RenderKeypad()
+    {
+        if(KeypadGrid is null) return;
+        KeypadGrid.Children.Clear();
+        KeypadGrid.RowDefinitions.Clear();
+        KeypadGrid.ColumnDefinitions.Clear();
+
+        var columns=Math.Max(1,_activeLayout.Columns);
+        var rows=Math.Max(1,_activeLayout.Keys.Count==0?5:_activeLayout.Keys.Max(k=>k.Row+Math.Max(1,k.RowSpan)));
+        for(int i=0;i<rows;i++)KeypadGrid.RowDefinitions.Add(new RowDefinition());
+        for(int i=0;i<columns;i++)KeypadGrid.ColumnDefinitions.Add(new ColumnDefinition());
+
+        foreach(var key in _activeLayout.Keys.OrderBy(k=>k.Row).ThenBy(k=>k.Column))
+        {
+            var tile=new KeyTileControl
+            {
+                KeyLabel=string.IsNullOrWhiteSpace(key.Label)?key.Id:key.Label,
+                Tag=key.Id,
+                Margin=new Thickness(4),
+                IsSelectedKey=string.Equals(key.Id,_selectedKey,StringComparison.OrdinalIgnoreCase),
+                Shape=key.RowSpan>1?"vertical":key.ColumnSpan>1?"horizontal":"square"
+            };
+            tile.Click+=Key_Click;
+            Grid.SetRow(tile,Math.Max(0,key.Row));
+            Grid.SetColumn(tile,Math.Max(0,key.Column));
+            Grid.SetRowSpan(tile,Math.Max(1,key.RowSpan));
+            Grid.SetColumnSpan(tile,Math.Max(1,key.ColumnSpan));
+            KeypadGrid.Children.Add(tile);
+        }
+
+        if(_activeLayout.Keys.Count>0 && DeviceLayoutCatalog.GetKey(_activeLayout,_selectedKey) is null)
+            _selectedKey=_activeLayout.Keys[0].Id;
+        SelectedKeyText.Text=_selectedKey;
+        UpdateSelectedAction();
     }
 
     private async void RefreshKeyTiles()
