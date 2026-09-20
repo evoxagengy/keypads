@@ -39,7 +39,22 @@ public static class DeviceLayoutCatalog
         if (device is null) return LegacyTemplate("");
 
         var saved = config.DeviceLayouts.FirstOrDefault(x => x.DeviceFingerprint == device.Fingerprint);
-        if (saved is not null) return saved;
+        if (saved is not null)
+        {
+            // v0.4.0 shipped an incorrect hard-coded geometry for this device.
+            // Replace only that known template; never overwrite a layout the user calibrated.
+            if(string.Equals(device.Vid,"1710",StringComparison.OrdinalIgnoreCase)
+               && string.Equals(device.Pid,"8812",StringComparison.OrdinalIgnoreCase)
+               && string.Equals(saved.Source,"known-template",StringComparison.OrdinalIgnoreCase))
+            {
+                var corrected=Numeric4x5Template(device.Fingerprint,
+                    string.IsNullOrWhiteSpace(device.CustomName)?device.FriendlyName:device.CustomName);
+                config.DeviceLayouts.Remove(saved);
+                config.DeviceLayouts.Add(corrected);
+                return corrected;
+            }
+            return saved;
+        }
 
         DeviceLayoutDefinition layout;
         if (string.Equals(device.Vid, "1710", StringComparison.OrdinalIgnoreCase) &&
