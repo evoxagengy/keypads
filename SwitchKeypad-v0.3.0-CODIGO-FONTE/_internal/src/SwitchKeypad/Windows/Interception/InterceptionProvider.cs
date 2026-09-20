@@ -36,8 +36,10 @@ public sealed class InterceptionProvider : IInterceptionProvider
 
     public bool TryStart(DeviceDefinition device, Func<DeviceKeyEvent,bool> consumePredicate)
     {
-        if (_ctx == 0 || State is InterceptionState.Unavailable or InterceptionState.Error) return false;
+        if (_ctx == 0 || State==InterceptionState.Unavailable) return false;
         if(State==InterceptionState.Running)return true;
+        // Device matching errors are recoverable: switching to another keyboard must not require restarting the app.
+        if(State==InterceptionState.Error){State=InterceptionState.Ready;StatusText="Interception pronto para nova identificação";}
         if(string.IsNullOrWhiteSpace(device.Vid)||string.IsNullOrWhiteSpace(device.Pid)){StatusText="Identificação USB insuficiente";return false;}
         var matches = new List<int>();
         for (var id=1;id<=10;id++)
