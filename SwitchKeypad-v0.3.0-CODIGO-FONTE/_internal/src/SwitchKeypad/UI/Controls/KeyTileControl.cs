@@ -23,9 +23,9 @@ public sealed class KeyTileControl : System.Windows.Controls.Button
     private readonly Image _appIcon=new(){Width=30,Height=30,Stretch=Stretch.Uniform,IsHitTestVisible=false,Margin=new Thickness(0,9,0,20)};
     public void SetActionIcon(ImageSource? image){_appIcon.Source=image;_appIcon.Visibility=image is null?Visibility.Collapsed:Visibility.Visible;_icon.Visibility=image is null?Visibility.Visible:Visibility.Collapsed;}
     private readonly System.Windows.Controls.Image _bg = new(){Stretch=System.Windows.Media.Stretch.Fill,IsHitTestVisible=false,Margin=new Thickness(4)};
-    private readonly TextBlock _key = new(){FontSize=18,FontWeight=FontWeights.SemiBold,Margin=new Thickness(23,20,0,0),HorizontalAlignment=System.Windows.HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Top};
+    private readonly TextBlock _key = new(){FontSize=18,FontWeight=FontWeights.SemiBold,Margin=new Thickness(18,16,8,0),HorizontalAlignment=System.Windows.HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Top,TextWrapping=TextWrapping.Wrap};
     private readonly TextBlock _icon = new(){FontSize=22,HorizontalAlignment=System.Windows.HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,9,0,20)};
-    private readonly TextBlock _action = new(){FontSize=11,HorizontalAlignment=System.Windows.HorizontalAlignment.Stretch,VerticalAlignment=VerticalAlignment.Bottom,TextAlignment=TextAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis,Margin=new Thickness(16,0,16,10),Foreground=new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(220,232,246))};
+    private readonly TextBlock _action = new(){FontSize=10.5,FontWeight=FontWeights.Medium,HorizontalAlignment=System.Windows.HorizontalAlignment.Stretch,VerticalAlignment=VerticalAlignment.Bottom,TextAlignment=TextAlignment.Center,TextWrapping=TextWrapping.Wrap,MaxHeight=30,Margin=new Thickness(12,0,12,11),Foreground=new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(220,232,246))};
 
     public KeyTileControl()
     {
@@ -36,7 +36,8 @@ public sealed class KeyTileControl : System.Windows.Controls.Button
     protected override void OnPropertyChanged(DependencyPropertyChangedEventArgs e){ base.OnPropertyChanged(e); if(IsLoaded) Refresh(); }
     private void Refresh(string? forced=null)
     {
-        _key.Text=KeyLabel; _action.Text=ActionLabel; _icon.Text=IconText;
+        _key.Text=KeyLabel; _action.Text=string.IsNullOrWhiteSpace(ActionLabel)?"Sem ação":ActionLabel; _icon.Text=IconText;
+        _key.FontSize=KeyLabel.Length switch { >12=>11, >8=>13, >5=>15, _=>18 };
         var state = IsSelectedKey || IsPressed ? "select" : IsMouseOver || IsKeyboardFocused ? "hover" : "normal";
         var file = Shape.ToLowerInvariant() switch
         {
