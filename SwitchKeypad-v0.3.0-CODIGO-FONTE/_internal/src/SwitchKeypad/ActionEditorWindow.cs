@@ -57,10 +57,10 @@ public sealed class ActionEditorWindow : Window
         _browse=Button("Procurar…",Browse);tools.Children.Add(_browse);
         _record=Button("Gravar atalho",(_,_)=>{_recording=true;_record.Content="Pressione o atalho…";_record.Focus();});
         _record.PreviewKeyDown+=Record;tools.Children.Add(_record);
-        _fields.Children.Add(_appPanel);Add(_appPanel,"Aplicativos do Menu Iniciar — pesquise pelo nome",_search);
+        _fields.Children.Add(_appPanel);Add(_appPanel,"Aplicativos instalados — pesquise como no Windows",_search);
         _apps.Height=120;_apps.DisplayMemberPath="Name";StyleList(_apps);_appPanel.Children.Add(_apps);
         _search.TextChanged+=(_,_)=>{if(!_loading)_apps.ItemsSource=_discovered.Where(a=>a.Name.Contains(_search.Text,StringComparison.CurrentCultureIgnoreCase)).ToList();};
-        _apps.SelectionChanged+=(_,_)=>{if(!_loading&&_apps.SelectedItem is DiscoveredApp app){_parameter.Text=app.ShortcutPath;_name.Text=app.Name;}};
+        _apps.SelectionChanged+=(_,_)=>{if(!_loading&&_apps.SelectedItem is DiscoveredApp app){_parameter.Text=app.LaunchTarget;_name.Text=app.Name;}};
         _choice.DisplayMemberPath="Value";_choice.SelectedValuePath="Key";_choice.Margin=new Thickness(0,10,0,10);_fields.Children.Add(_choice);
         _fields.Children.Add(_enter);
         body.Children.Add(_sequence);Add(_sequence,"Passos da sequência — até 32",_steps);_steps.Height=160;StyleList(_steps);
@@ -111,7 +111,7 @@ public sealed class ActionEditorWindow : Window
         Show(_record,t==ActionType.SendHotkey);Show(_enter,t==ActionType.TypeText);
         _enter.IsChecked=Action.Parameters.GetValueOrDefault("appendEnter")=="true";
         Show(_appPanel,t==ActionType.OpenApplication);
-        if(t==ActionType.OpenApplication){_discovered=AppDiscoveryService.ScanStartMenu();_apps.ItemsSource=_discovered;}
+        if(t==ActionType.OpenApplication){_discovered=AppDiscoveryService.ScanInstalledApps();_apps.ItemsSource=_discovered;}
         var options=t switch {
             ActionType.MediaControl=>Pairs("playpause","Reproduzir / pausar","next","Próxima faixa","previous","Faixa anterior","volumeup","Aumentar volume","volumedown","Diminuir volume","mute","Silenciar áudio"),
             ActionType.SystemAction=>Pairs("explorer","Explorador de Arquivos","settings","Configurações do Windows","lock","Bloquear sessão","screenshot","Capturar tela"),
