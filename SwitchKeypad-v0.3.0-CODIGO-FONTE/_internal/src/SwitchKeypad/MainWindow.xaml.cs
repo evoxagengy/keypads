@@ -127,7 +127,11 @@ public partial class MainWindow : Window
         if(DeviceLayoutCatalog.IsNumLock(ev))return false;
         var candidates=DeviceLayoutCatalog.ResolveCandidates(_activeLayout,ev);
         if(candidates.Count>0)
-            return candidates.Any(k=>FindMapping(k.Id) is { Action.Type: not ActionType.PassThrough and not ActionType.Disabled });
+            return candidates.Any(k=>
+            {
+                var mapped=FindMapping(k.Id);
+                return mapped is not null && mapped.Action.Type is not (ActionType.PassThrough or ActionType.Disabled);
+            });
         var mapping = ResolvePhysicalKey(ev) is string key?FindMapping(key):null;
         return mapping is not null && mapping.Action.Type is not (ActionType.PassThrough or ActionType.Disabled);
     }
