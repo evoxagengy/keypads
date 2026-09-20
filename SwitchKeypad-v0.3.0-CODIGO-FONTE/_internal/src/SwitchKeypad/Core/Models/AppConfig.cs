@@ -9,6 +9,7 @@ public sealed class AppConfig
     public bool StartWithWindows { get; set; }
     public bool StartMinimized { get; set; }
     public List<DeviceDefinition> Devices { get; set; } = [];
+    public List<DeviceLayoutDefinition> DeviceLayouts { get; set; } = [];
     public List<ProfileDefinition> Profiles { get; set; } = [ProfileDefinition.CreateDefault()];
 }
 
@@ -46,6 +47,7 @@ public sealed class KeyMapping
     public string PhysicalKey { get; set; } = "";
     public int ScanCode { get; set; }
     public int VirtualKey { get; set; }
+    public bool IsExtended { get; set; }
     public TriggerType Trigger { get; set; } = TriggerType.Press;
     public RepeatBehavior Repeat { get; set; } = RepeatBehavior.IgnoreRepeat;
     public ActionDefinition Action { get; set; } = new();

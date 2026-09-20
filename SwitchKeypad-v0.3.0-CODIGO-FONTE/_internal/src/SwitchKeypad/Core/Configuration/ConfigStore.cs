@@ -35,6 +35,8 @@ public sealed class ConfigStore
         Directory.CreateDirectory(RootPath);
         var temp = ConfigPath + ".tmp";
         File.WriteAllText(temp, JsonSerializer.Serialize(Config, JsonOptions));
+        if(File.Exists(ConfigPath)&&!File.Exists(ConfigPath+".before-v0.4.0.bak"))
+            File.Copy(ConfigPath,ConfigPath+".before-v0.4.0.bak");
         if(File.Exists(ConfigPath)&&!File.Exists(ConfigPath+".before-v0.3.0.bak"))
             File.Copy(ConfigPath,ConfigPath+".before-v0.3.0.bak");
         File.Move(temp, ConfigPath, true);

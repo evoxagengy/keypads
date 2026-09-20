@@ -57,10 +57,15 @@ public sealed class ActionEditorWindow : Window
         _browse=Button("Procurar…",Browse);tools.Children.Add(_browse);
         _record=Button("Gravar atalho",(_,_)=>{_recording=true;_record.Content="Pressione o atalho…";_record.Focus();});
         _record.PreviewKeyDown+=Record;tools.Children.Add(_record);
-        _fields.Children.Add(_appPanel);Add(_appPanel,"Aplicativos do Menu Iniciar — pesquise pelo nome",_search);
-        _apps.Height=120;_apps.DisplayMemberPath="Name";StyleList(_apps);_appPanel.Children.Add(_apps);
+        _fields.Children.Add(_appPanel);Add(_appPanel,"Aplicativos instalados — pesquise como no Windows",_search);
+        _apps.Height=180;StyleList(_apps);
+        var appTemplate=new DataTemplate(typeof(DiscoveredApp));
+        var appRow=new FrameworkElementFactory(typeof(StackPanel));appRow.SetValue(StackPanel.OrientationProperty,Orientation.Horizontal);
+        var appIcon=new FrameworkElementFactory(typeof(Image));appIcon.SetValue(Image.WidthProperty,28.0);appIcon.SetValue(Image.HeightProperty,28.0);appIcon.SetValue(Image.MarginProperty,new Thickness(4,4,12,4));appIcon.SetBinding(Image.SourceProperty,new System.Windows.Data.Binding(nameof(DiscoveredApp.Icon)));
+        var appName=new FrameworkElementFactory(typeof(TextBlock));appName.SetValue(TextBlock.VerticalAlignmentProperty,VerticalAlignment.Center);appName.SetValue(TextBlock.FontSizeProperty,14.0);appName.SetBinding(TextBlock.TextProperty,new System.Windows.Data.Binding(nameof(DiscoveredApp.Name)));
+        appRow.AppendChild(appIcon);appRow.AppendChild(appName);appTemplate.VisualTree=appRow;_apps.ItemTemplate=appTemplate;_appPanel.Children.Add(_apps);
         _search.TextChanged+=(_,_)=>{if(!_loading)_apps.ItemsSource=_discovered.Where(a=>a.Name.Contains(_search.Text,StringComparison.CurrentCultureIgnoreCase)).ToList();};
-        _apps.SelectionChanged+=(_,_)=>{if(!_loading&&_apps.SelectedItem is DiscoveredApp app){_parameter.Text=app.ShortcutPath;_name.Text=app.Name;}};
+        _apps.SelectionChanged+=(_,_)=>{if(!_loading&&_apps.SelectedItem is DiscoveredApp app){_parameter.Text=app.LaunchTarget;_name.Text=app.Name;}};
         _choice.DisplayMemberPath="Value";_choice.SelectedValuePath="Key";_choice.Margin=new Thickness(0,10,0,10);_fields.Children.Add(_choice);
         _fields.Children.Add(_enter);
         body.Children.Add(_sequence);Add(_sequence,"Passos da sequência — até 32",_steps);_steps.Height=160;StyleList(_steps);
@@ -68,6 +73,7 @@ public sealed class ActionEditorWindow : Window
         stepTools.Children.Add(Button("Adicionar",(_,_)=>EditStep(true)));
         stepTools.Children.Add(Button("Editar",(_,_)=>EditStep(false)));
         stepTools.Children.Add(Button("Remover",(_,_)=>{if(_steps.SelectedIndex>=0){Action.Steps.RemoveAt(_steps.SelectedIndex);RefreshSteps();}}));
+        stepTools.Children.Add(Button("Duplicar",(_,_)=>{if(_steps.SelectedIndex>=0&&Action.Steps.Count<32){var index=_steps.SelectedIndex;Action.Steps.Insert(index+1,Copy(Action.Steps[index]));RefreshSteps();_steps.SelectedIndex=index+1;}}));
         stepTools.Children.Add(Button("↑",(_,_)=>Move(-1)));stepTools.Children.Add(Button("↓",(_,_)=>Move(1)));
         _repeatMode.ItemsSource=new[]{
             new KeyValuePair<SequenceRepeatMode,string>(SequenceRepeatMode.Once,"Executar uma vez"),
@@ -111,7 +117,7 @@ public sealed class ActionEditorWindow : Window
         Show(_record,t==ActionType.SendHotkey);Show(_enter,t==ActionType.TypeText);
         _enter.IsChecked=Action.Parameters.GetValueOrDefault("appendEnter")=="true";
         Show(_appPanel,t==ActionType.OpenApplication);
-        if(t==ActionType.OpenApplication){_discovered=AppDiscoveryService.ScanStartMenu();_apps.ItemsSource=_discovered;}
+        if(t==ActionType.OpenApplication){_discovered=AppDiscoveryService.ScanInstalledApps();_apps.ItemsSource=_discovered;}
         var options=t switch {
             ActionType.MediaControl=>Pairs("playpause","Reproduzir / pausar","next","Próxima faixa","previous","Faixa anterior","volumeup","Aumentar volume","volumedown","Diminuir volume","mute","Silenciar áudio"),
             ActionType.SystemAction=>Pairs("explorer","Explorador de Arquivos","settings","Configurações do Windows","lock","Bloquear sessão","screenshot","Capturar tela"),
@@ -119,7 +125,8 @@ public sealed class ActionEditorWindow : Window
             ActionType.SwitchProfile=>App.ConfigStore.Config.Profiles.Select(p=>new KeyValuePair<string,string>(p.Id,p.Name)).ToList(),_=>[]};
         _choiceKey=t==ActionType.WebSearch?"engine":_parameterKey;
         _choice.ItemsSource=options;_choice.SelectedValue=Action.Parameters.GetValueOrDefault(_choiceKey,options.FirstOrDefault().Key??"");
-        Show(_choice,options.Count>0);Show(_parameter,t is not (ActionType.MediaControl or ActionType.SystemAction or ActionType.SwitchProfile));
+        Show(_choice,options.Count>0);Show(_parameter,t is not (ActionType.MediaControl or ActionType.SystemAction or ActionType.SwitchProfile or ActionType.OpenApplication));
+        Show(_label,t!=ActionType.OpenApplication);
         _hint.Text=t switch {
             ActionType.SendHotkey=>"Clique em Gravar atalho e pressione a combinação. Escape cancela a gravação. Também aceita CTRL+SHIFT+S, F1, TAB e teclas individuais.",
             ActionType.TypeText=>"Espaços e quebras de linha são preservados. O texto será digitado na janela ativa; marque a opção acima para enviar Enter ao final.",
