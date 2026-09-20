@@ -1,0 +1,74 @@
+name: Build Switch Keypad v0.4.1
+
+on:
+  push:
+    branches:
+      - release/v0.4.1
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: SwitchKeypad-v0.3.0-CODIGO-FONTE
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore .\_internal\src\SwitchKeypad\SwitchKeypad.csproj
+
+      - name: Build
+        run: dotnet build .\_internal\src\SwitchKeypad\SwitchKeypad.csproj -c Release --no-restore
+
+      - name: Run checks
+        run: dotnet run --project .\tests\SwitchKeypad.Checks.csproj -c Release
+
+      - name: Publish portable app
+        run: |
+          Remove-Item .\_internal\build\publish -Recurse -Force -ErrorAction SilentlyContinue
+          dotnet publish .\_internal\src\SwitchKeypad\SwitchKeypad.csproj -c Release -r win-x64 --self-contained true -o .\_internal\build\publish
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) { throw 'ISCC.exe não encontrado' }
+          & $iscc .\_internal\installer\SwitchKeypad.iss
+
+      - name: Create portable ZIP
+        run: |
+          $dist = Join-Path $PWD 'DIST'
+          New-Item -ItemType Directory -Force $dist | Out-Null
+          $portable = Join-Path $dist 'SwitchKeypad-v0.4.1-portable.zip'
+          Remove-Item $portable -Force -ErrorAction SilentlyContinue
+          Compress-Archive -Path .\_internal\build\publish\SwitchKeypad.exe -DestinationPath $portable -CompressionLevel Optimal
+
+      - name: Create release ZIP
+        run: |
+          $dist = Join-Path $PWD 'DIST'
+          $release = Join-Path $dist 'SwitchKeypad-v0.4.1-RELEASE.zip'
+          Remove-Item $release -Force -ErrorAction SilentlyContinue
+          Compress-Archive -Path (Join-Path $dist 'SwitchKeypad-Setup-v0.4.1.exe'),(Join-Path $dist 'SwitchKeypad-v0.4.1-portable.zip') -DestinationPath $release -CompressionLevel Optimal
+          Get-FileHash $release -Algorithm SHA256 | Format-List
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SwitchKeypad-v0.4.1-RELEASE
+          path: SwitchKeypad-v0.3.0-CODIGO-FONTE/DIST/SwitchKeypad-v0.4.1-RELEASE.zip
+          if-no-files-found: error
+          retention-days: 30
