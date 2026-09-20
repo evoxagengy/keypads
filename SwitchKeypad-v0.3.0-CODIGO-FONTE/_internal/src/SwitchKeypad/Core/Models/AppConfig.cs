@@ -17,6 +17,7 @@ public sealed class DeviceDefinition
 {
     public string Fingerprint { get; set; } = "";
     public string FriendlyName { get; set; } = "Numpad USB Dedicado";
+    public string? CustomName { get; set; }
     public string? DevicePath { get; set; }
     public string? Vid { get; set; }
     public string? Pid { get; set; }
