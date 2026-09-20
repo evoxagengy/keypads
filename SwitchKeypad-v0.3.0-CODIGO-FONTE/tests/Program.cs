@@ -97,6 +97,9 @@ class Program
    Check(DeviceLayoutCatalog.GetKey(numericLayout,"Num")?.ReservedToggle==true,"Num Lock is reserved as enable-disable control");
    var fullLayout=DeviceLayoutCatalog.FullKeyboardTemplate("full","Main Keyboard");
    Check(fullLayout.Columns==23&&DeviceLayoutCatalog.GetKey(fullLayout,"NumPlus")?.RowSpan==2&&DeviceLayoutCatalog.GetKey(fullLayout,"NumEnter")?.RowSpan==2,"Full keyboard template includes aligned numpad");
+   var migrateLayoutConfig=new AppConfig{DeviceLayouts=[new(){DeviceFingerprint="migrate",Source="known-template",Columns=4,Keys=[]}]};
+   var migratedLayout=DeviceLayoutCatalog.Resolve(migrateLayoutConfig,new DeviceDefinition{Fingerprint="migrate",Vid="1710",Pid="8812",FriendlyName="HID"});
+   Check(migratedLayout.Source=="numeric-4x5"&&DeviceLayoutCatalog.GetKey(migratedLayout,"000") is not null,"v0.4.0 wrong known template migrates to corrected layout");
 
    var window=new MainWindow();
    window.Show();
