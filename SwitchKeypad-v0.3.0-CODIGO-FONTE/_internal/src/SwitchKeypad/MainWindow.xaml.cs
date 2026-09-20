@@ -272,8 +272,12 @@ public partial class MainWindow : Window
         RefreshDeviceDisplay();
     }
 
-    private static string DisplayDeviceName(DeviceDefinition d)
-        => string.IsNullOrWhiteSpace(d.CustomName)?d.FriendlyName:d.CustomName!;
+    private string DisplayDeviceName(DeviceDefinition d)
+    {
+        if(!string.IsNullOrWhiteSpace(d.CustomName))return d.CustomName!;
+        var saved=App.ConfigStore.Config.Devices.FirstOrDefault(x=>x.Fingerprint==d.Fingerprint);
+        return !string.IsNullOrWhiteSpace(saved?.CustomName)?saved.CustomName!:d.FriendlyName;
+    }
 
     private void RenameDevice_Click(object sender,RoutedEventArgs e)
     {
