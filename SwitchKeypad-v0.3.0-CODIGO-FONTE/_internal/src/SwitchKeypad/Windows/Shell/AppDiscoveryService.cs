@@ -2,7 +2,10 @@ using System.Runtime.InteropServices;
 
 namespace SwitchKeypad.Windows.Shell;
 
-public sealed record DiscoveredApp(string Name, string LaunchTarget, string? IconSource = null, string Source = "start-menu");
+public sealed record DiscoveredApp(string Name, string LaunchTarget, string? IconSource = null, string Source = "start-menu")
+{
+    public System.Windows.Media.ImageSource? Icon => ShellIcon.Read(IconSource ?? LaunchTarget);
+}
 
 public static class AppDiscoveryService
 {
