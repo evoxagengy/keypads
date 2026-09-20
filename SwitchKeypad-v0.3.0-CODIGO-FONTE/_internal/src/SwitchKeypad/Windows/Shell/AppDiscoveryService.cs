@@ -57,7 +57,8 @@ public static class AppDiscoveryService
             if(folder is null) return;
             dynamic dFolder=folder;
             items=dFolder.Items();
-            foreach(dynamic item in items)
+            dynamic dItems=items;
+            foreach(dynamic item in dItems)
             {
                 string name;
                 string path;
