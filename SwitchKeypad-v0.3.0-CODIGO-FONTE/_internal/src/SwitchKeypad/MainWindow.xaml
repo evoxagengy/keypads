@@ -95,7 +95,7 @@
                     <Button x:Name="TabProfiles" Style="{StaticResource TabButton}" Content="◈   Perfis" Click="TabProfiles_Click"/>
                     <Button x:Name="TabDevice" Style="{StaticResource TabButton}" Content="▭   Dispositivo" Click="TabDevice_Click"/>
                 </StackPanel>
-                <Button Grid.Column="1" Style="{StaticResource FlatButton}" BorderBrush="#0788F7" Foreground="#29AEFF" FontSize="15" Content="▥   Modo de Teste" Click="TestMode_Click"/>
+                <Button Grid.Column="1" Style="{StaticResource FlatButton}" BorderBrush="#0788F7" Foreground="#29AEFF" FontSize="15" Content="⌨   Identificar Teclas" Click="TestMode_Click"/>
             </Grid>
 
             <!-- Content -->
@@ -128,27 +128,7 @@
                 <!-- Keypad -->
                 <Border Grid.Column="1" Style="{StaticResource SectionBorder}" Padding="36,24" Margin="0,0,14,0">
                     <Viewbox Stretch="Uniform" StretchDirection="Both">
-                    <Grid x:Name="KeypadGrid" HorizontalAlignment="Center" VerticalAlignment="Center" Width="500" Height="620">
-                        <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
-                        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-                        <ui:KeyTileControl x:Name="KNum" Grid.Row="0" Grid.Column="0" Margin="4" KeyLabel="Num" ActionLabel="" Click="Key_Click" Tag="Num"/>
-                        <ui:KeyTileControl Grid.Row="0" Grid.Column="1" Margin="4" KeyLabel="/" IconText="▦" ActionLabel="Calculadora" Click="Key_Click" Tag="/"/>
-                        <ui:KeyTileControl Grid.Row="0" Grid.Column="2" Margin="4" KeyLabel="*" IconText="⌁" ActionLabel="Mute Mic" Click="Key_Click" Tag="*"/>
-                        <ui:KeyTileControl Grid.Row="0" Grid.Column="3" Margin="4" KeyLabel="-" IconText="◀" ActionLabel="Vol -" Click="Key_Click" Tag="-"/>
-                        <ui:KeyTileControl Grid.Row="1" Grid.Column="0" Margin="4" KeyLabel="7" IconText="🌐" ActionLabel="Chrome" Click="Key_Click" Tag="7"/>
-                        <ui:KeyTileControl Grid.Row="1" Grid.Column="1" Margin="4" KeyLabel="8" IconText="◉" ActionLabel="OBS Studio" Click="Key_Click" Tag="8"/>
-                        <ui:KeyTileControl Grid.Row="1" Grid.Column="2" Margin="4" KeyLabel="9" IconText="●" ActionLabel="Discord" Click="Key_Click" Tag="9"/>
-                        <ui:KeyTileControl Grid.Row="1" Grid.Column="3" Grid.RowSpan="2" Margin="4" Shape="vertical" KeyLabel="+" IconText="🔊" ActionLabel="Vol +" Click="Key_Click" Tag="+"/>
-                        <ui:KeyTileControl Grid.Row="2" Grid.Column="0" Margin="4" KeyLabel="4" IconText="📁" ActionLabel="Explorador" Click="Key_Click" Tag="4"/>
-                        <ui:KeyTileControl Grid.Row="2" Grid.Column="1" Margin="4" KeyLabel="5" IconText="▣" ActionLabel="Salvar" Click="Key_Click" Tag="5"/>
-                        <ui:KeyTileControl Grid.Row="2" Grid.Column="2" Margin="4" KeyLabel="6" IconText="▶" ActionLabel="Play/Pause" Click="Key_Click" Tag="6"/>
-                        <ui:KeyTileControl Grid.Row="3" Grid.Column="0" Margin="4" KeyLabel="1" IconText="◈" ActionLabel="Edge" Click="Key_Click" Tag="1"/>
-                        <ui:KeyTileControl Grid.Row="3" Grid.Column="1" Margin="4" KeyLabel="2" IconText="⌘" ActionLabel="VS Code" Click="Key_Click" Tag="2"/>
-                        <ui:KeyTileControl Grid.Row="3" Grid.Column="2" Margin="4" KeyLabel="3" IconText="▤" ActionLabel="Bloco de Notas" Click="Key_Click" Tag="3"/>
-                        <ui:KeyTileControl Grid.Row="3" Grid.Column="3" Grid.RowSpan="2" Margin="4" Shape="vertical" KeyLabel="Enter" IconText="◆" ActionLabel="Executar" Click="Key_Click" Tag="Enter"/>
-                        <ui:KeyTileControl x:Name="K0" Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2" Margin="4" Shape="horizontal" KeyLabel="0" IconText="▦" ActionLabel="Aplicativos" IsSelectedKey="True" Click="Key_Click" Tag="0"/>
-                        <ui:KeyTileControl Grid.Row="4" Grid.Column="2" Margin="4" KeyLabel="." IconText="🔇" ActionLabel="Silenciar" Click="Key_Click" Tag="."/>
-                    </Grid>
+                    <Grid x:Name="KeypadGrid" HorizontalAlignment="Center" VerticalAlignment="Center" Width="500" Height="620"/>
                     </Viewbox>
                 </Border>
 
@@ -186,7 +166,7 @@
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Ellipse x:Name="FooterStatusDot" Width="16" Height="16" Fill="#F8B33C"/><TextBlock x:Name="FooterStatus" Text="Selecione um teclado numérico dedicado" Foreground="#BFD3E7" Margin="10,0,0,0" MaxWidth="1040" TextTrimming="CharacterEllipsis"/></StackPanel>
                 <Button Grid.Column="1" Content="■  Parar sequências" Style="{StaticResource FlatButton}" Click="StopActions_Click" VerticalAlignment="Center" Margin="12,0,20,0"/>
-                <TextBlock Grid.Column="2" Text="v0.3.0" Foreground="#8FA8C0" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2" Text="v0.4.0" Foreground="#8FA8C0" VerticalAlignment="Center"/>
             </Grid>
         </Grid></Viewbox>
     </Border>
