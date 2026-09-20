@@ -105,7 +105,7 @@
                 <!-- Left -->
                 <ScrollViewer Grid.Column="0" Margin="0,0,14,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel>
-                    <Border Style="{StaticResource SectionBorder}" MinHeight="285">
+                    <Border Style="{StaticResource SectionBorder}" MinHeight="335">
                         <StackPanel><TextBlock Text="Dispositivo Selecionado" FontSize="18" FontWeight="Bold"/>
                             <Border Background="#0D2233" BorderBrush="#23475F" BorderThickness="1" CornerRadius="9" Margin="0,14,0,10" Padding="15">
                                 <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="70"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -114,6 +114,7 @@
                                 </Grid>
                             </Border>
                             <Button Style="{StaticResource FlatButton}" Content="↻   Trocar Dispositivo" Height="50" Click="DeviceButton_Click"/>
+                            <Button Style="{StaticResource FlatButton}" Content="✎   Renomear Dispositivo" Height="42" Margin="0,8,0,0" Click="RenameDevice_Click"/>
                         </StackPanel>
                     </Border>
                     <Border Style="{StaticResource SectionBorder}" MinHeight="175" Margin="0,12,0,0">
@@ -166,7 +167,7 @@
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Ellipse x:Name="FooterStatusDot" Width="16" Height="16" Fill="#F8B33C"/><TextBlock x:Name="FooterStatus" Text="Selecione um teclado numérico dedicado" Foreground="#BFD3E7" Margin="10,0,0,0" MaxWidth="1040" TextTrimming="CharacterEllipsis"/></StackPanel>
                 <Button Grid.Column="1" Content="■  Parar sequências" Style="{StaticResource FlatButton}" Click="StopActions_Click" VerticalAlignment="Center" Margin="12,0,20,0"/>
-                <TextBlock Grid.Column="2" Text="v0.4.0" Foreground="#8FA8C0" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2" Text="v0.4.1" Foreground="#8FA8C0" VerticalAlignment="Center"/>
             </Grid>
         </Grid></Viewbox>
     </Border>
