@@ -237,7 +237,7 @@ public static class DeviceLayoutCatalog
         {
             DeviceFingerprint=fingerprint,
             Name=name,
-            Columns=22,
+            Columns=23,
             Confirmed=false,
             Source="full-keyboard"
         };
@@ -250,13 +250,13 @@ public static class DeviceLayoutCatalog
         for(int i=0;i<row1.Length;i++)Slot(layout,$"R1-{i}",row1[i],1,i);
         Slot(layout,"Backspace","Backspace",1,13,1,2);
         Slot(layout,"Insert","Ins",1,16);Slot(layout,"Home","Home",1,17);Slot(layout,"PageUp","PgUp",1,18);
-        Slot(layout,"Num","Num Lock",1,19,reserved:true);Slot(layout,"NumSlash","/",1,20);Slot(layout,"NumStar","*",1,21);
+        Slot(layout,"Num","Num Lock",1,19,reserved:true);Slot(layout,"NumSlash","/",1,20);Slot(layout,"NumStar","*",1,21);Slot(layout,"NumMinus","-",1,22);
 
         Slot(layout,"Tab","Tab",2,0,1,2);
         var row2=new[]{"Q","W","E","R","T","Y","U","I","O","P","[","]","\\"};
         for(int i=0;i<row2.Length;i++)Slot(layout,$"R2-{i}",row2[i],2,i+2);
         Slot(layout,"Delete","Del",2,16);Slot(layout,"End","End",2,17);Slot(layout,"PageDown","PgDn",2,18);
-        Slot(layout,"Num7","7",2,19);Slot(layout,"Num8","8",2,20);Slot(layout,"Num9","9",2,21);
+        Slot(layout,"Num7","7",2,19);Slot(layout,"Num8","8",2,20);Slot(layout,"Num9","9",2,21);Slot(layout,"NumPlus","+",2,22,2,1);
 
         Slot(layout,"Caps","Caps",3,0,1,2);
         var row3=new[]{"A","S","D","F","G","H","J","K","L",";","'"};
@@ -269,7 +269,7 @@ public static class DeviceLayoutCatalog
         for(int i=0;i<row4.Length;i++)Slot(layout,$"R4-{i}",row4[i],4,i+3);
         Slot(layout,"RShift","Shift",4,13,1,2);
         Slot(layout,"Up","↑",4,17);
-        Slot(layout,"Num1","1",4,19);Slot(layout,"Num2","2",4,20);Slot(layout,"Num3","3",4,21);
+        Slot(layout,"Num1","1",4,19);Slot(layout,"Num2","2",4,20);Slot(layout,"Num3","3",4,21);Slot(layout,"NumEnter","Enter",4,22,2,1);
 
         Slot(layout,"LCtrl","Ctrl",5,0,1,2);Slot(layout,"LWin","Win",5,2);Slot(layout,"LAlt","Alt",5,3);
         Slot(layout,"Space","Espaço",5,4,1,7);
