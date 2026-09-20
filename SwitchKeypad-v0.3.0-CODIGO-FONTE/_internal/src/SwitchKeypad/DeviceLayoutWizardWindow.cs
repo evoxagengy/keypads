@@ -99,7 +99,7 @@ public sealed class DeviceLayoutWizardWindow : Window
 
     private Button MakeButton(string text,bool primary)
     {
-        var b=new Button{Content=text,Style=(Style)FindResource(primary?"PrimaryButton":"FlatButton"),Margin=new Thickness(7,0,0,0),Padding=new Thickness(14,8)};
+        var b=new Button{Content=text,Style=(Style)FindResource(primary?"PrimaryButton":"FlatButton"),Margin=new Thickness(7,0,0,0),Padding=new Thickness(14,8,14,8)};
         return b;
     }
 
