@@ -12,9 +12,9 @@
     <RootNamespace>SwitchKeypad</RootNamespace>
     <ApplicationIcon>Assets\Brand\SwitchKeypad.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.3.0</Version>
-    <AssemblyVersion>0.3.0.0</AssemblyVersion>
-    <FileVersion>0.3.0.0</FileVersion>
+    <Version>0.4.0</Version>
+    <AssemblyVersion>0.4.0.0</AssemblyVersion>
+    <FileVersion>0.4.0.0</FileVersion>
     <Product>Switch Keypad</Product>
     <Company>EVOX</Company>
     <Authors>EVOX</Authors>
